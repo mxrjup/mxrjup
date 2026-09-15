@@ -9,6 +9,4 @@ README.md
 LICENSE
 .vscode
 .idea
-computer-app/node_modules
-computer-app/dist
 server/node_modules

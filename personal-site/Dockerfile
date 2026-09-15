@@ -10,17 +10,10 @@ COPY . .
 
 RUN npm run build:angular
 
-# Build React app (computer-app)
-WORKDIR /app/computer-app
-RUN npm ci
-RUN npm run build
-
-
 # Stage 2: Serve the application with Nginx
 FROM nginx:alpine
 
 COPY --from=build /app/dist/personal-site/browser /usr/share/nginx/html
-COPY --from=build /app/dist/computer /usr/share/nginx/html/computer
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

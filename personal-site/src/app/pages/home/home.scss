@@ -272,64 +272,6 @@
     border: none;
 }
 
-.computer-sticker {
-    /* Deprecated/Removed in favor of desktop-icon-link */
-    display: none;
-}
-
-.desktop-icon-link {
-    position: fixed;
-    bottom: 60px;
-    /* Above marquee */
-    left: auto;
-    right: 5%;
-    /* Right of the smoking cat (img-4 is at right: 20%) */
-    transform: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    cursor: pointer;
-    z-index: 50;
-    /* Above images */
-    width: 80px;
-    text-align: center;
-    transition: all 0.2s;
-
-    .desktop-icon-img {
-        width: 48px;
-        height: 48px;
-        margin-bottom: 5px;
-        /* Pixelated aesthetic */
-        image-rendering: pixelated;
-    }
-
-    .desktop-icon-text {
-        color: black;
-        /* Or white if on dark bg, but here bg is white/transparent */
-        font-family: var(--font-mono, monospace);
-        font-size: 0.8rem;
-        font-weight: bold;
-        background: transparent;
-        padding: 2px;
-        border: 1px dotted transparent;
-    }
-
-    &:hover {
-        .desktop-icon-img {
-            filter: brightness(1.1);
-        }
-
-        .desktop-icon-text {
-            background: #000080;
-            /* Windows selection blue */
-            color: white;
-            border: 1px dotted white;
-        }
-    }
-}
-
 /* --- 6. Decor Images --- */
 .decor-image {
     position: absolute;

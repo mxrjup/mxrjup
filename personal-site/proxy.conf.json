@@ -6,9 +6,5 @@
     "/uploads": {
         "target": "http://localhost:3000",
         "secure": false
-    },
-    "/computer": {
-        "target": "http://localhost:3000",
-        "secure": false
     }
 }
