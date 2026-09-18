@@ -31,7 +31,7 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // Generic Data Endpoints
 // Read-only: content is written by Sveltia CMS (/admin), which commits straight
 // to the repository. A deploy is what brings those commits onto this host.
-const allowedFiles = ['timeline', 'history', 'reviews', 'media', 'cool_stuff', 'credits'];
+const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits'];
 
 // Get all data for a type
 app.get('/api/data/:type', async (req, res) => {
@@ -445,21 +445,31 @@ app.post('/api/chat/:room/messages', async (req, res) => {
 // this server also serves both builds. Registered after the API routes above so
 // it only sees what they didn't handle.
 
+// The app shells must never be cached: their filename is stable while the
+// hashed bundles they point at change on every build, so a cached copy keeps
+// loading the previous release. nginx set this before it was removed.
+const NO_STORE = 'no-store, no-cache, must-revalidate';
+const shellHeaders = (res, filePath) => {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', NO_STORE);
+};
+const sendShell = (res, next, dir) => {
+    res.setHeader('Cache-Control', NO_STORE);
+    res.sendFile(path.join(dir, 'index.html'), (err) => err && next());
+};
+
 // Windows 95 computer app (React, built to dist/computer)
-app.use('/computer', express.static(COMPUTER_DIR));
-app.get('/computer/*', (req, res, next) => {
-    res.sendFile(path.join(COMPUTER_DIR, 'index.html'), (err) => err && next());
-});
+app.use('/computer', express.static(COMPUTER_DIR, { setHeaders: shellHeaders }));
+app.get('/computer/*', (req, res, next) => sendShell(res, next, COMPUTER_DIR));
 
 // The old hand-built back office lived here; send bookmarks to the CMS.
 app.get('/add', (req, res) => res.redirect(302, '/admin/'));
 
 // Angular site, with client-side routing falling back to its index.html
-app.use(express.static(BROWSER_DIR));
+app.use(express.static(BROWSER_DIR, { setHeaders: shellHeaders }));
 app.get('*', (req, res, next) => {
     // Unmatched API and upload paths are 404s, not the Angular shell.
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
-    res.sendFile(path.join(BROWSER_DIR, 'index.html'), (err) => err && next());
+    sendShell(res, next, BROWSER_DIR);
 });
 
 const server = app.listen(PORT, () => {

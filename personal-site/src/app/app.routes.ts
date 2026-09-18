@@ -7,7 +7,6 @@ import { PostDetailComponent } from './pages/post-detail/post-detail';
 import { MediaComponent } from './pages/media/media';
 import { MusicComponent } from './pages/music/music';
 import { TimelineComponent } from './pages/music/timeline/timeline';
-import { HistoryComponent } from './pages/music/history/history';
 
 import { ReviewDetailComponent } from './pages/music/review-detail/review-detail';
 import { CoolStuffComponent } from './pages/cool-stuff/cool-stuff';
@@ -27,7 +26,6 @@ export const routes: Routes = [
     { path: 'media', component: MediaComponent },
     { path: 'music', component: MusicComponent },
     { path: 'music/timeline', component: TimelineComponent },
-    { path: 'music/history', component: HistoryComponent },
     { path: 'music/review/:id', component: ReviewDetailComponent },
     { path: 'cool-stuff', component: CoolStuffComponent },
     { path: 'wip', component: WipComponent },
