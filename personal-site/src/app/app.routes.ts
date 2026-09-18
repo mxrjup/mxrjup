@@ -1,4 +1,4 @@
-import { Routes } from '@angular/router';
+import { CanActivateFn, Routes } from '@angular/router';
 import { HomeComponent } from './pages/home/home';
 
 import { BlogListComponent } from './pages/blog-list/blog-list';
@@ -14,6 +14,13 @@ import { CoolStuffComponent } from './pages/cool-stuff/cool-stuff';
 import { WipComponent } from './pages/wip/wip';
 import { CreditsComponent } from './pages/credits/credits';
 
+// The back office is Sveltia CMS at /admin, a static page served outside the
+// Angular app, so this leaves the router rather than navigating within it.
+const leaveToAdmin: CanActivateFn = () => {
+    window.location.href = '/admin/';
+    return false;
+};
+
 export const routes: Routes = [
     { path: '', component: HomeComponent },
     { path: 'blog', component: BlogListComponent },
@@ -26,12 +33,10 @@ export const routes: Routes = [
     { path: 'wip', component: WipComponent },
     { path: 'credits', component: CreditsComponent },
 
-    { path: 'login', loadComponent: () => import('./pages/login/login.component').then(m => m.LoginComponent) },
-    {
-        path: 'add',
-        loadComponent: () => import('./pages/admin/admin.component').then(m => m.AdminComponent),
-        canActivate: [authGuard]
-    },
     { path: 'post/:id', component: PostDetailComponent },
+
+    // The old back office used to live here.
+    { path: 'add', canActivate: [leaveToAdmin], children: [] },
+    // Anything else lands on the home page instead of throwing NG04002.
+    { path: '**', redirectTo: '' },
 ];
-import { authGuard } from './guards/auth.guard';
