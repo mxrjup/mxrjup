@@ -2,10 +2,12 @@
 /**
  * Export your saved Spotify albums into server/data/timeline.json.
  *
- *   node scripts/spotify-timeline.mjs --client-id=<id> [--download] [--out=path]
+ *   node scripts/spotify-timeline.mjs --client-id=<id> [--history] [--download] [--out=path]
  *
  * Reads GET /v1/me/albums, which returns the album plus `added_at` - the date
- * you saved it, which is what the timeline groups by. Authorisation is the
+ * you saved it, which is what the timeline groups by. --history writes the same
+ * albums to the listening log instead, ordered by release date: the timeline is
+ * when you found a record, the log is when it came out. Authorisation is the
  * Authorization Code + PKCE flow: your browser logs in to Spotify directly and
  * this script only ever sees the resulting token. No password goes through it,
  * and nothing is stored on disk.
@@ -46,6 +48,30 @@ export function toTimelineItems(savedAlbums) {
             date: String(added_at).slice(0, 10),
             // images are ordered widest first
             cover: album.images?.[0]?.url ?? ''
+        }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
+ * Spotify dates carry their own precision: "1975", "1975-03" or "1975-03-04".
+ * Pad to a full date so DatePipe and the CMS datetime widget both accept them.
+ */
+export function normalizeReleaseDate(date) {
+    const parts = String(date || '').split('-');
+    return [parts[0] || '0000', parts[1] || '01', parts[2] || '01'].join('-');
+}
+
+/**
+ * Map saved albums onto the listening log's shape, newest release first.
+ * The log stores { text, date } and renders in file order - it does no sorting
+ * of its own - so the order here is the order on the page.
+ */
+export function toHistoryItems(savedAlbums) {
+    return savedAlbums
+        .filter((saved) => saved?.album)
+        .map(({ album }) => ({
+            text: `${(album.artists || []).map((a) => a.name).join(', ')} - ${album.name}`.replace(/^ - /, ''),
+            date: normalizeReleaseDate(album.release_date)
         }))
         .sort((a, b) => b.date.localeCompare(a.date));
 }
@@ -164,14 +190,15 @@ async function main() {
     }
 
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-    const out = args.out ? path.resolve(args.out) : path.join(root, 'server/data/timeline.json');
+    const target = args.history ? 'history' : 'timeline';
+    const out = args.out ? path.resolve(args.out) : path.join(root, `server/data/${target}.json`);
 
     const token = await authorize(clientId);
     console.log('Fetching saved albums...');
     const saved = await fetchSavedAlbums(token);
 
-    let items = toTimelineItems(saved);
-    if (args.download) {
+    let items = args.history ? toHistoryItems(saved) : toTimelineItems(saved);
+    if (args.download && !args.history) {
         console.log('Downloading covers...');
         items = await downloadCovers(items, path.join(root, 'server/uploads'));
     }
@@ -179,6 +206,7 @@ async function main() {
     await writeFile(out, JSON.stringify({ items }, null, 2) + '\n');
     console.log(`\nWrote ${items.length} albums to ${out}`);
     console.log(items.length ? `Newest: ${items[0].date} - oldest: ${items[items.length - 1].date}` : '');
+    if (args.history && args.download) console.log('(--download is ignored for --history: the log shows no covers)');
 }
 
 // Only run when executed directly, so the mapping stays importable for tests.
