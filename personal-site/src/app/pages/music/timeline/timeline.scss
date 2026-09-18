@@ -147,6 +147,13 @@
         color: var(--color-accent);
     }
 
+    /* The year the record came out, quieter than the date it was saved. */
+    .release {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        opacity: 0.55;
+    }
+
     .title {
         font-family: var(--font-main);
         font-weight: bold;

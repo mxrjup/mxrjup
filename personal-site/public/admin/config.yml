@@ -84,29 +84,15 @@ collections:
                 format: 'YYYY-MM-DD'
                 date_format: 'YYYY-MM-DD'
                 time_format: false
-              - { name: cover, label: Cover image, widget: image, required: false }
-
-  - name: history
-    label: Listening history
-    files:
-      - name: history
-        label: History
-        file: personal-site/server/data/history.json
-        description: Log entries on /music/history
-        fields:
-          - name: items
-            label: Entries
-            label_singular: Entry
-            widget: list
-            summary: '{{fields.date}} - {{fields.text}}'
-            fields:
-              - { name: text, label: Log text, widget: text }
-              - name: date
-                label: Date
+              - name: releaseDate
+                label: Release date
                 widget: datetime
+                required: false
                 format: 'YYYY-MM-DD'
                 date_format: 'YYYY-MM-DD'
                 time_format: false
+                hint: 'When the record came out - the card shows the year'
+              - { name: cover, label: Cover image, widget: image, required: false }
 
   - name: media
     label: Media

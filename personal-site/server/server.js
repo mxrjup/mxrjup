@@ -31,7 +31,7 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // Generic Data Endpoints
 // Read-only: content is written by Sveltia CMS (/admin), which commits straight
 // to the repository. A deploy is what brings those commits onto this host.
-const allowedFiles = ['timeline', 'history', 'reviews', 'media', 'cool_stuff', 'credits'];
+const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits'];
 
 // Get all data for a type
 app.get('/api/data/:type', async (req, res) => {

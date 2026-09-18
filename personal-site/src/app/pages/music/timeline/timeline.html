@@ -21,6 +21,9 @@
                         <div class="info">
                             <span class="date">{{ album.date }}</span>
                             <span class="title">{{ album.title }}</span>
+                            @if (album.releaseDate) {
+                            <span class="release">RELEASED {{ album.releaseDate.slice(0, 4) }}</span>
+                            }
                         </div>
                     </div>
 
