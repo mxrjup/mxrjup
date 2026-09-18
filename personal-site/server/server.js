@@ -6,12 +6,16 @@ const path = require('path');
 const fs = require('fs').promises;
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+const gitStorage = require('./gitStorage');
+
 const app = express();
-const PORT = 3000;
+// Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
+const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
-
-// ...
+const BROWSER_DIR = path.join(__dirname, '../dist/personal-site/browser');
+const COMPUTER_DIR = path.join(__dirname, '../dist/computer');
+const MAX_ADMIN_FILE_BYTES = (process.env.MAX_ADMIN_FILE_SIZE_MB || 25) * 1024 * 1024;
 
 const PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -47,7 +51,7 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage: storage, limits: { fileSize: MAX_ADMIN_FILE_BYTES } });
 
 
 
@@ -112,18 +116,32 @@ app.post('/api/data/:type', authenticate, async (req, res) => {
     const filePath = path.join(DATA_DIR, `${type}.json`);
     try {
         await fs.writeFile(filePath, JSON.stringify(newData, null, 2));
+        await gitStorage.syncJson(filePath, newData, `content: update ${type}`);
         res.json({ success: true });
     } catch (err) {
+        console.error('[API] Error saving data:', err);
         res.status(500).json({ error: 'Error saving data' });
     }
 });
 
 // File Upload
 // File Upload
-app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
+app.post('/api/upload', authenticate, upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
+
+    // The disk copy serves the file right away; the commit is what makes it
+    // survive the next deploy. If the commit fails the upload failed, so drop
+    // the local copy rather than leave a file that vanishes on redeploy.
+    try {
+        await gitStorage.syncFile(req.file.path, await fs.readFile(req.file.path), `content: add ${req.file.filename}`);
+    } catch (err) {
+        console.error('[API] Error committing upload:', err);
+        await fs.unlink(req.file.path).catch(() => { });
+        return res.status(502).json({ error: 'Upload could not be saved to the repository' });
+    }
+
     // Return relative path
     const fileUrl = `/uploads/${req.file.filename}`;
     res.json({ url: fileUrl });
@@ -142,13 +160,20 @@ app.post('/api/delete-file', authenticate, async (req, res) => {
 
     try {
         await fs.unlink(filePath);
-
-        res.json({ success: true });
     } catch (err) {
         console.error('[API] Error deleting file:', err);
         // We generally return success even if file not found to avoid blocking UI
-        res.json({ success: true, message: 'File could not be deleted or not found' });
     }
+
+    try {
+        // Without this the file would be restored by the next deploy.
+        await gitStorage.removeFile(filePath, `content: remove ${filename}`);
+    } catch (err) {
+        console.error('[API] Error removing file from the repository:', err);
+        return res.status(502).json({ error: 'File could not be removed from the repository' });
+    }
+
+    res.json({ success: true });
 });
 
 // ============================================
@@ -161,9 +186,19 @@ const COMPUTER_FILES_JSON = path.join(__dirname, 'data', 'computer_files.json');
 const MAX_QUOTA_BYTES = (process.env.USER_UPLOADS_QUOTA_MB || 1000) * 1024 * 1024;
 const MAX_FILE_BYTES = (process.env.MAX_FILE_SIZE_MB || 10) * 1024 * 1024;
 
+const DEFAULT_COMPUTER_FILES = { files: [], folders: ['My Documents', 'My Pictures', 'My Music'] };
+
 // Ensure user uploads directory exists
 if (!fsSync.existsSync(USER_UPLOADS_DIR)) {
     fsSync.mkdirSync(USER_UPLOADS_DIR, { recursive: true });
+}
+
+// Guest files are not versioned, so a fresh host starts without this file, and
+// every write route below reads it before writing. Create it up front so the
+// first upload or folder creation doesn't fail on a new deployment.
+if (!fsSync.existsSync(COMPUTER_FILES_JSON)) {
+    fsSync.mkdirSync(path.dirname(COMPUTER_FILES_JSON), { recursive: true });
+    fsSync.writeFileSync(COMPUTER_FILES_JSON, JSON.stringify(DEFAULT_COMPUTER_FILES, null, 2));
 }
 
 // Calculate total directory size
@@ -202,7 +237,7 @@ app.get('/api/computer/files', async (req, res) => {
         const data = await fs.readFile(COMPUTER_FILES_JSON, 'utf8');
         res.json(JSON.parse(data));
     } catch (err) {
-        res.json({ files: [], folders: ['My Documents', 'My Pictures', 'My Music'] });
+        res.json(DEFAULT_COMPUTER_FILES);
     }
 });
 
@@ -523,8 +558,26 @@ app.post('/api/chat/:room/messages', async (req, res) => {
 });
 
 
-// Serve React computer app
-app.use('/computer', express.static(path.join(__dirname, '../dist/computer')));
+// ============================================
+// STATIC FRONTENDS
+// ============================================
+// Managed hosting runs a single Node process with no nginx in front of it, so
+// this server also serves both builds. Registered after the API routes above so
+// it only sees what they didn't handle.
+
+// Windows 95 computer app (React, built to dist/computer)
+app.use('/computer', express.static(COMPUTER_DIR));
+app.get('/computer/*', (req, res, next) => {
+    res.sendFile(path.join(COMPUTER_DIR, 'index.html'), (err) => err && next());
+});
+
+// Angular site, with client-side routing falling back to its index.html
+app.use(express.static(BROWSER_DIR));
+app.get('*', (req, res, next) => {
+    // Unmatched API and upload paths are 404s, not the Angular shell.
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    res.sendFile(path.join(BROWSER_DIR, 'index.html'), (err) => err && next());
+});
 
 const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

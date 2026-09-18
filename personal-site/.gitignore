@@ -9,12 +9,14 @@
 
 
 # Node
-# Node
 node_modules/
-server/data/*
-!server/data/.gitkeep
-server/uploads/*
-!server/uploads/.gitkeep
+
+# Admin content is versioned in git (see server/gitStorage.js): the media files
+# under server/uploads/ and the JSON content files under server/data/ are tracked.
+# Guest state from the Windows 95 computer page is NOT - it lives on the host disk only.
+server/uploads/users/
+server/data/computer_files.json
+server/data/chat_data.json
 
 
 npm-debug.log

@@ -1,8 +1,12 @@
-name: Deploy to DigitalOcean
+name: Deploy to Infomaniak
 
 on:
   push:
     branches: [ main ]
+
+# Content commits made by the site itself (admin uploads) carry [skip ci], so
+# they do not trigger a deploy: the file is already on the host, the commit only
+# makes it durable.
 
 jobs:
   deploy:
@@ -11,30 +15,34 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.DROPLET_IP }}
-          username: ${{ secrets.DROPLET_USER }}
-          key: ${{ secrets.DROPLET_SSH_KEY }}
+          host: ${{ secrets.INFOMANIAK_HOST }}
+          username: ${{ secrets.INFOMANIAK_USER }}
+          key: ${{ secrets.INFOMANIAK_SSH_KEY }}
           script: |
-            # Go to the git root folder (adjust if your folder name is different)
-            cd ~/mxrjup
-            
-            # Create persistent directories for data storage
-            mkdir -p persistent/data
-            mkdir -p persistent/uploads
-            chmod -R 777 persistent
-            
-            # Get the latest code
-            git pull origin main
-            
-            # Seed essential uploads (no-clobber to preserve existing files)
-            cp -n personal-site/server/seed-uploads/* persistent/uploads/ 2>/dev/null || true
-            
-            # Go into the project folder where docker-compose.yml is
+            set -e
+            # Path of the repository checkout on the host.
+            cd ${{ secrets.INFOMANIAK_SITE_PATH }}
+
+            # Reset instead of pull: admin uploads are written to disk by the
+            # running app *and* committed, so the same files exist locally and
+            # in the commit. git pull refuses that ("untracked working tree
+            # files would be overwritten"); reset --hard reconciles it.
+            # Guest uploads under server/uploads/users/ are git-ignored and are
+            # left untouched.
+            git fetch origin main
+            git reset --hard origin/main
+
             cd personal-site
-            
-            # Restart the app
-            docker compose down --remove-orphans
-            docker compose up -d --build
-            
-            # Optional: Clean up old unused images to save space
-            docker system prune -f
+
+            # Installs the Angular, server and computer-app dependencies
+            # (the root postinstall handles the last two).
+            npm ci
+
+            # Builds dist/personal-site/browser and dist/computer, both served
+            # by server/server.js.
+            npm run build
+
+            # Restart the Node.js site so the new build is picked up.
+            # Passenger-style hosts watch this file; if your site restarts
+            # another way, replace this line with that command.
+            mkdir -p tmp && touch tmp/restart.txt
