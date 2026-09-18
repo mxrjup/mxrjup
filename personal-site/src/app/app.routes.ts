@@ -26,12 +26,5 @@ export const routes: Routes = [
     { path: 'wip', component: WipComponent },
     { path: 'credits', component: CreditsComponent },
 
-    { path: 'login', loadComponent: () => import('./pages/login/login.component').then(m => m.LoginComponent) },
-    {
-        path: 'add',
-        loadComponent: () => import('./pages/admin/admin.component').then(m => m.AdminComponent),
-        canActivate: [authGuard]
-    },
     { path: 'post/:id', component: PostDetailComponent },
 ];
-import { authGuard } from './guards/auth.guard';

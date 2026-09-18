@@ -14,28 +14,53 @@ Once the server is running, open your browser and navigate to `http://localhost:
 
 ## Configuration
 
-The backend reads `server/.env` (see `server/gitStorage.js` and `server/server.js`):
+The backend reads `server/.env`:
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `ADMIN_PASSWORD` | yes | - | Password for `/add`; the server exits at startup without it |
 | `PORT` | no | `3000` | Managed hosting assigns this at runtime |
-| `GITHUB_TOKEN` | production | - | Fine-grained token with read/write Contents on this repository |
-| `GITHUB_REPO` | production | - | `owner/name` of the repository to commit content to |
-| `GITHUB_BRANCH` | no | `main` | Branch that content is committed to |
-| `MAX_ADMIN_FILE_SIZE_MB` | no | `25` | Per-file cap on `/add` uploads |
 | `USER_UPLOADS_QUOTA_MB` | no | `1000` | Total quota for guest uploads on `/computer` |
 | `MAX_FILE_SIZE_MB` | no | `10` | Per-file cap on guest uploads |
 
-Without `GITHUB_TOKEN`/`GITHUB_REPO` the server writes to disk only, which is what you want locally.
+The server has no admin credentials: it only reads content. Editing happens in the
+CMS, which authenticates against GitHub.
+
+## Back office
+
+Content is edited with [Sveltia CMS](https://github.com/sveltia/sveltia-cms) at
+`/admin`, configured in `public/admin/config.yml`. It commits straight to this
+repository from the browser, so a content change is a commit and a deploy is what
+brings it onto the host.
+
+Two things must be set up before it works:
+
+1. **An OAuth proxy.** Deploy [sveltia-cms-auth](https://github.com/sveltia/sveltia-cms-auth)
+   to Cloudflare Workers (free), create a GitHub OAuth app pointing at it, and put the
+   Worker URL in `backend.base_url` in `config.yml`. The CMS cannot log in without it.
+2. **Content files.** Each collection edits one file under `server/data/`. The CMS
+   stores entries under an `items` key, so a file looks like `{"items": [...]}`.
+
+Uploads go to `server/uploads/` and are referenced as `/uploads/<file>`, which is what
+the server serves them at.
+
+### Migrating existing content
+
+The files under `server/data/` are committed empty. **A deploy resets the host's
+working tree to the repository, so deploying them as-is replaces whatever content is
+live.** Before deploying, copy each live file into the repository and wrap its array:
+
+```bash
+# for each of timeline, history, reviews, media, cool_stuff, credits
+node -e 'const a=require("./old/reviews.json");require("fs").writeFileSync("server/data/reviews.json",JSON.stringify({items:a},null,2))'
+```
+
+The server reads both shapes, so a bare array still works if you would rather not
+convert - but the CMS needs the `items` key to see the entries.
 
 ## Content storage
 
-Admin content is versioned in git: an upload on `/add` is written to `server/uploads/`
-*and* committed to the repository, and the JSON files under `server/data/` are committed
-on every save. The host's disk is a cache - a deploy resets the working tree to the
-remote, which restores the content. Content commits carry `[skip ci]` so they do not
-trigger a deploy of their own.
+Admin content is versioned in git: the JSON files under `server/data/` and the media
+under `server/uploads/` are tracked, and the CMS commits changes to them directly.
 
 Guest uploads from the `/computer` page are deliberately *not* versioned: they are
 anonymous and this repository is public. They live on the host's disk under

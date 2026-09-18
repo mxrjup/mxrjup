@@ -1,0 +1,179 @@
+# Sveltia CMS - the back office for this site, served at /admin.
+#
+# Content is committed straight to this repository from the browser. The Express
+# server only reads the resulting files, so there is no admin write API and no
+# server-side token.
+#
+# Each collection edits one of the JSON files the site already serves through
+# GET /api/data/:type. The CMS wraps the entries in an "items" key; the server
+# accepts both that shape and a bare array, so older files keep working.
+
+backend:
+  name: github
+  repo: mxrjup/mxrjup
+  branch: main
+  # OAuth proxy that turns a GitHub login into a token. Deploy
+  # https://github.com/sveltia/sveltia-cms-auth to Cloudflare Workers (free)
+  # and put its URL here - the CMS cannot authenticate without it.
+  base_url: https://REPLACE-WITH-YOUR-WORKER.workers.dev
+
+# Uploads land where the server already serves them from (/uploads).
+media_folder: personal-site/server/uploads
+public_folder: /uploads
+
+collections:
+  - name: reviews
+    label: Music reviews
+    files:
+      - name: reviews
+        label: Reviews
+        file: personal-site/server/data/reviews.json
+        description: Shown on /music, and individually on /music/review/:id
+        fields:
+          - name: items
+            label: Reviews
+            label_singular: Review
+            widget: list
+            summary: '{{fields.artist}} - {{fields.album}}'
+            fields:
+              - { name: id, label: ID, widget: uuid }
+              - { name: artist, label: Artist, widget: string }
+              - { name: album, label: Album, widget: string }
+              - { name: genre, label: Genre, widget: string, required: false }
+              - { name: cover, label: Cover, widget: image, required: false }
+              - { name: author, label: Review author, widget: string, required: false }
+              - name: date
+                label: Date
+                widget: datetime
+                format: 'YYYY-MM-DD'
+                date_format: 'YYYY-MM-DD'
+                time_format: false
+              - { name: score, label: Score, widget: string, required: false, hint: 'Ex: 8.5' }
+              - { name: text, label: Summary, widget: text, required: false, hint: 'Short text used in the list view' }
+              - name: content
+                label: Full review
+                widget: text
+                required: false
+                hint: 'Raw HTML - it is rendered as-is by the site'
+              - name: extracts
+                label: Sound extracts
+                widget: list
+                required: false
+                fields:
+                  - { name: title, label: Track title, widget: string }
+                  - { name: url, label: Audio file, widget: file }
+
+  - name: timeline
+    label: Music timeline
+    files:
+      - name: timeline
+        label: Timeline
+        file: personal-site/server/data/timeline.json
+        description: Albums on /music/timeline
+        fields:
+          - name: items
+            label: Albums
+            label_singular: Album
+            widget: list
+            summary: '{{fields.title}} ({{fields.date}})'
+            fields:
+              - { name: title, label: Album title, widget: string }
+              - name: date
+                label: Date
+                widget: datetime
+                format: 'YYYY-MM-DD'
+                date_format: 'YYYY-MM-DD'
+                time_format: false
+              - { name: cover, label: Cover image, widget: image, required: false }
+
+  - name: history
+    label: Listening history
+    files:
+      - name: history
+        label: History
+        file: personal-site/server/data/history.json
+        description: Log entries on /music/history
+        fields:
+          - name: items
+            label: Entries
+            label_singular: Entry
+            widget: list
+            summary: '{{fields.date}} - {{fields.text}}'
+            fields:
+              - { name: text, label: Log text, widget: text }
+              - name: date
+                label: Date
+                widget: datetime
+                format: 'YYYY-MM-DD'
+                date_format: 'YYYY-MM-DD'
+                time_format: false
+
+  - name: media
+    label: Media
+    files:
+      - name: media
+        label: Media
+        file: personal-site/server/data/media.json
+        description: The grid on /media
+        fields:
+          - name: items
+            label: Media
+            label_singular: Item
+            widget: list
+            summary: '{{fields.title}}'
+            fields:
+              - { name: id, label: ID, widget: uuid }
+              - { name: title, label: Title, widget: string }
+              - name: type
+                label: Type
+                widget: select
+                default: image
+                options: [image, video, audio]
+              - { name: url, label: File, widget: file }
+              - name: thumbnail
+                label: Thumbnail
+                widget: image
+                required: false
+                hint: 'Optional - images fall back to the file itself'
+
+  - name: cool_stuff
+    label: Cool stuff
+    files:
+      - name: cool_stuff
+        label: Cool stuff
+        file: personal-site/server/data/cool_stuff.json
+        description: The grid on /cool-stuff. Tag colours come from the type.
+        fields:
+          - name: items
+            label: Things
+            label_singular: Thing
+            widget: list
+            summary: '{{fields.title}}'
+            fields:
+              - { name: id, label: ID, widget: uuid }
+              - { name: title, label: Title, widget: string }
+              - name: type
+                label: Type
+                widget: select
+                options: [BOOK, PRODUCT, ARTICLE, MUSIC, IMAGE]
+              - { name: subtitle, label: Subtitle / author, widget: string, required: false }
+              - { name: link, label: Link, widget: string, required: false }
+              - { name: image, label: Image, widget: image }
+
+  - name: credits
+    label: Credits
+    files:
+      - name: credits
+        label: Credits
+        file: personal-site/server/data/credits.json
+        description: Artwork credits on /credits
+        fields:
+          - name: items
+            label: Credits
+            label_singular: Credit
+            widget: list
+            summary: '{{fields.artName}} : {{fields.artistName}}'
+            fields:
+              - { name: id, label: ID, widget: uuid }
+              - { name: artName, label: Art name, widget: string, hint: 'Ex: Decor 1' }
+              - { name: artistName, label: Artist name, widget: string }
