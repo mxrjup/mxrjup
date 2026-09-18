@@ -12,6 +12,36 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
+## Configuration
+
+The backend reads `server/.env` (see `server/gitStorage.js` and `server/server.js`):
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `ADMIN_PASSWORD` | yes | - | Password for `/add`; the server exits at startup without it |
+| `PORT` | no | `3000` | Managed hosting assigns this at runtime |
+| `GITHUB_TOKEN` | production | - | Fine-grained token with read/write Contents on this repository |
+| `GITHUB_REPO` | production | - | `owner/name` of the repository to commit content to |
+| `GITHUB_BRANCH` | no | `main` | Branch that content is committed to |
+| `MAX_ADMIN_FILE_SIZE_MB` | no | `25` | Per-file cap on `/add` uploads |
+| `USER_UPLOADS_QUOTA_MB` | no | `1000` | Total quota for guest uploads on `/computer` |
+| `MAX_FILE_SIZE_MB` | no | `10` | Per-file cap on guest uploads |
+
+Without `GITHUB_TOKEN`/`GITHUB_REPO` the server writes to disk only, which is what you want locally.
+
+## Content storage
+
+Admin content is versioned in git: an upload on `/add` is written to `server/uploads/`
+*and* committed to the repository, and the JSON files under `server/data/` are committed
+on every save. The host's disk is a cache - a deploy resets the working tree to the
+remote, which restores the content. Content commits carry `[skip ci]` so they do not
+trigger a deploy of their own.
+
+Guest uploads from the `/computer` page are deliberately *not* versioned: they are
+anonymous and this repository is public. They live on the host's disk under
+`server/uploads/users/`, with their index in `server/data/computer_files.json`, both
+git-ignored.
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
