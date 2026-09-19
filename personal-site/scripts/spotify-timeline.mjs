@@ -1,37 +1,53 @@
 #!/usr/bin/env node
 /**
- * Export your saved Spotify albums into server/data/timeline.json.
+ * Export your saved Spotify albums into server/data/timeline_spotify.json.
  *
  *   node scripts/spotify-timeline.mjs --client-id=<id> [--download] [--out=path]
  *
  * Reads GET /v1/me/albums, which returns the album plus `added_at` - the date
  * you saved it, which the timeline groups by - and `release_date`, which each
  * entry carries as well, so a card shows both when you found a record and when
- * it came out. Authorisation is the
- * Authorization Code + PKCE flow: your browser logs in to Spotify directly and
- * this script only ever sees the resulting token. No password goes through it,
- * and nothing is stored on disk.
+ * it came out.
+ *
+ * The file this writes is NOT versioned: it belongs to the host, which refreshes
+ * it from cron (scripts/spotify-cron.sh). Albums added by hand in the CMS live in
+ * server/data/timeline.json, which is versioned; the server serves the two merged.
+ *
+ * Two ways in:
+ *
+ *   Interactive (a laptop) - Authorization Code + PKCE. Your browser logs in to
+ *   Spotify directly and this script only ever sees the resulting token. No
+ *   password goes through it, and nothing is stored on disk.
+ *
+ *   Unattended (cron) - a refresh token, minted once with
+ *   `--print-refresh-token` and kept in server/.env as SPOTIFY_REFRESH_TOKEN.
+ *   That path needs the client secret; in exchange the token is stable, where a
+ *   PKCE refresh token rotates on every use and would have to be written back.
  *
  * Setup, once:
  *   1. https://developer.spotify.com/dashboard -> Create app
  *   2. Add redirect URI exactly: http://127.0.0.1:8888/callback
  *      (127.0.0.1, not localhost - Spotify rejects localhost)
- *   3. Copy the Client ID into --client-id
+ *   3. Copy the Client ID into --client-id, and for cron the Client Secret into
+ *      SPOTIFY_CLIENT_SECRET, then run:
+ *      node scripts/spotify-timeline.mjs --print-refresh-token
  *
  * Covers default to Spotify's CDN URL, which keeps several hundred images out
  * of a repository that is already large. --download fetches them into
- * server/uploads/ instead, at the cost of committing every one of them.
+ * server/uploads/ instead, at the cost of committing every one of them - not
+ * something to do from cron, which would re-fetch them on every run.
  */
 
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, rename, mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 const REDIRECT_URI = 'http://127.0.0.1:8888/callback';
 const SCOPE = 'user-library-read';
+const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 
 const base64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
@@ -72,22 +88,9 @@ function openBrowser(url) {
     spawn(cmd, [url], { stdio: 'ignore', detached: true, shell: process.platform === 'win32' }).unref();
 }
 
-/** Run the PKCE dance and resolve with an access token. */
-async function authorize(clientId) {
-    const verifier = base64url(randomBytes(48));
-    const challenge = base64url(createHash('sha256').update(verifier).digest());
-
-    const authUrl = new URL('https://accounts.spotify.com/authorize');
-    authUrl.search = new URLSearchParams({
-        client_id: clientId,
-        response_type: 'code',
-        redirect_uri: REDIRECT_URI,
-        code_challenge_method: 'S256',
-        code_challenge: challenge,
-        scope: SCOPE
-    }).toString();
-
-    const code = await new Promise((resolve, reject) => {
+/** Serve the redirect URI once and resolve with the code Spotify sends back. */
+function waitForCode(authUrl) {
+    return new Promise((resolve, reject) => {
         const server = createServer((req, res) => {
             const { searchParams } = new URL(req.url, REDIRECT_URI);
             const received = searchParams.get('code');
@@ -102,20 +105,74 @@ async function authorize(clientId) {
             openBrowser(authUrl.toString());
         });
     });
+}
 
-    const response = await fetch('https://accounts.spotify.com/api/token', {
+/** Build the /authorize URL; `extra` carries whichever flow's parameters. */
+function authorizeUrl(clientId, extra) {
+    const url = new URL('https://accounts.spotify.com/authorize');
+    url.search = new URLSearchParams({
+        client_id: clientId,
+        response_type: 'code',
+        redirect_uri: REDIRECT_URI,
+        scope: SCOPE,
+        ...extra
+    }).toString();
+    return url;
+}
+
+async function postToken(body, headers = {}) {
+    const response = await fetch(TOKEN_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: REDIRECT_URI,
-            client_id: clientId,
-            code_verifier: verifier
-        })
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
+        body: new URLSearchParams(body)
     });
-    if (!response.ok) throw new Error(`Token exchange failed: ${response.status} ${await response.text()}`);
-    return (await response.json()).access_token;
+    if (!response.ok) throw new Error(`Token request failed: ${response.status} ${await response.text()}`);
+    return response.json();
+}
+
+const basicAuth = (clientId, clientSecret) =>
+    ({ Authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64') });
+
+/** Run the PKCE dance and resolve with an access token. No secret needed. */
+async function authorizePkce(clientId) {
+    const verifier = base64url(randomBytes(48));
+    const challenge = base64url(createHash('sha256').update(verifier).digest());
+
+    const code = await waitForCode(authorizeUrl(clientId, {
+        code_challenge_method: 'S256',
+        code_challenge: challenge
+    }));
+
+    const token = await postToken({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: clientId,
+        code_verifier: verifier
+    });
+    return token.access_token;
+}
+
+/**
+ * Plain Authorization Code flow, which needs the secret and in return hands back
+ * a refresh token that does not rotate - the one thing cron can live on.
+ * Run once by hand; the result goes in server/.env.
+ */
+async function authorizeForRefreshToken(clientId, clientSecret) {
+    const code = await waitForCode(authorizeUrl(clientId, {}));
+    return postToken(
+        { grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI },
+        basicAuth(clientId, clientSecret)
+    );
+}
+
+/** Trade the stored refresh token for a fresh access token - the cron path. */
+async function tokenFromRefresh(clientId, clientSecret, refreshToken) {
+    const token = await postToken(
+        { grant_type: 'refresh_token', refresh_token: refreshToken },
+        basicAuth(clientId, clientSecret)
+    );
+    return token.access_token;
 }
 
 /** Page through the whole saved-albums library, 50 at a time. */
@@ -172,6 +229,9 @@ async function main() {
     );
 
     const clientId = args['client-id'] || process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = args['client-secret'] || process.env.SPOTIFY_CLIENT_SECRET;
+    const refreshToken = args['refresh-token'] || process.env.SPOTIFY_REFRESH_TOKEN;
+
     if (!clientId) {
         console.error('Missing --client-id=<id> (or SPOTIFY_CLIENT_ID).');
         console.error('Create an app at https://developer.spotify.com/dashboard with redirect URI');
@@ -179,10 +239,32 @@ async function main() {
         process.exit(1);
     }
 
-    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-    const out = args.out ? path.resolve(args.out) : path.join(root, 'server/data/timeline.json');
+    // Mint the credential cron runs on, then stop - this writes no timeline.
+    if (args['print-refresh-token']) {
+        if (!clientSecret) {
+            console.error('Missing --client-secret=<secret> (or SPOTIFY_CLIENT_SECRET).');
+            console.error('Dashboard -> your app -> Settings -> View client secret.');
+            process.exit(1);
+        }
+        const token = await authorizeForRefreshToken(clientId, clientSecret);
+        console.log('\nAdd this line to personal-site/server/.env on the host:\n');
+        console.log(`SPOTIFY_REFRESH_TOKEN=${token.refresh_token}`);
+        console.log('\nIt does not expire. Treat it like a password: it reads your Spotify library.');
+        return;
+    }
 
-    const token = await authorize(clientId);
+    if (refreshToken && !clientSecret) {
+        console.error('SPOTIFY_REFRESH_TOKEN is set but SPOTIFY_CLIENT_SECRET is not - refreshing needs both.');
+        process.exit(1);
+    }
+
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const out = args.out ? path.resolve(args.out) : path.join(root, 'server/data/timeline_spotify.json');
+
+    const token = refreshToken
+        ? await tokenFromRefresh(clientId, clientSecret, refreshToken)
+        : await authorizePkce(clientId);
+
     console.log('Fetching saved albums...');
     const saved = await fetchSavedAlbums(token);
 
@@ -192,7 +274,11 @@ async function main() {
         items = await downloadCovers(items, path.join(root, 'server/uploads'));
     }
 
-    await writeFile(out, JSON.stringify({ items }, null, 2) + '\n');
+    // The running server reads this file on every request, so swap it in with a
+    // rename - a half-written file is never served, and a failed run changes nothing.
+    await writeFile(`${out}.tmp`, JSON.stringify({ items }, null, 2) + '\n');
+    await rename(`${out}.tmp`, out);
+
     console.log(`\nWrote ${items.length} albums to ${out}`);
     console.log(items.length ? `Newest: ${items[0].date} - oldest: ${items[items.length - 1].date}` : '');
 }

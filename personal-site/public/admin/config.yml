@@ -69,7 +69,13 @@ collections:
       - name: timeline
         label: Timeline
         file: personal-site/server/data/timeline.json
-        description: Albums on /music/timeline
+        description: >-
+          Albums added by hand on /music/timeline. The records saved in Spotify
+          arrive on their own - a weekly cron on the host writes them to
+          timeline_spotify.json, which is not in this repository, and the server
+          serves the two lists merged. Add an album here only if it is not in
+          your Spotify library, or to override one: an entry whose title matches
+          a Spotify one replaces it.
         fields:
           - name: items
             label: Albums

@@ -33,6 +33,43 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // to the repository. A deploy is what brings those commits onto this host.
 const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits'];
 
+/**
+ * Read one content file as a plain array.
+ * Sveltia CMS stores the entries under "items"; files written before the CMS are
+ * a bare array. Both shapes are served to the site the same way. A file that does
+ * not exist yet reads as empty rather than failing - a fresh host has none of the
+ * unversioned ones.
+ */
+async function readItems(filePath) {
+    try {
+        const parsed = JSON.parse(await fs.readFile(filePath, 'utf8'));
+        return Array.isArray(parsed) ? parsed : (parsed.items || []);
+    } catch (err) {
+        if (err.code === 'ENOENT') return [];
+        throw err;
+    }
+}
+
+/**
+ * The music timeline comes from two places, merged here rather than in a file so
+ * neither side ever overwrites the other:
+ *   timeline.json          - albums added by hand in the CMS, versioned in git.
+ *   timeline_spotify.json  - the saved-albums export, rewritten weekly by cron
+ *                            (scripts/spotify-cron.sh) and NOT versioned, so the
+ *                            deploy's `git reset --hard` leaves it alone.
+ * Titles are the timeline's identity, so a manual entry with the same title as a
+ * Spotify one wins: that is how you correct what the export produced.
+ */
+async function readTimeline() {
+    const spotify = await readItems(path.join(DATA_DIR, 'timeline_spotify.json'));
+    const manual = await readItems(path.join(DATA_DIR, 'timeline.json'));
+
+    const byTitle = new Map(spotify.map((item) => [item.title, item]));
+    for (const item of manual) byTitle.set(item.title, item);
+
+    return [...byTitle.values()].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
 // Get all data for a type
 app.get('/api/data/:type', async (req, res) => {
     const { type } = req.params;
@@ -40,18 +77,12 @@ app.get('/api/data/:type', async (req, res) => {
         return res.status(400).json({ error: 'Invalid data type' });
     }
 
-    const filePath = path.join(DATA_DIR, `${type}.json`);
     try {
-        const data = await fs.readFile(filePath, 'utf8');
-        const parsed = JSON.parse(data);
-        // Sveltia CMS stores the entries under "items"; files written before the
-        // CMS are a bare array. Both are served to the site as a plain array.
-        res.json(Array.isArray(parsed) ? parsed : (parsed.items || []));
+        const items = type === 'timeline'
+            ? await readTimeline()
+            : await readItems(path.join(DATA_DIR, `${type}.json`));
+        res.json(items);
     } catch (err) {
-        if (err.code === 'ENOENT') {
-            // Return empty array if file doesn't exist
-            return res.json([]);
-        }
         res.status(500).json({ error: 'Error reading data' });
     }
 });
