@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const BROWSER_DIR = path.join(__dirname, '../dist/personal-site/browser');
+const BROWSER_DIR = path.join(__dirname, '../dist/angular-mxrjup/browser');
 const COMPUTER_DIR = path.join(__dirname, '../dist/computer');
 
 // Ensure directories exist

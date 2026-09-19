@@ -1,12 +1,16 @@
 name: Deploy to Infomaniak
 
+# Deploys are cut deliberately, not by merging. Landing work on main changes
+# nothing on the host; pushing a tag is what says "this is the version to run".
+#
+# Consequence worth knowing: content committed by Sveltia CMS lands on main like
+# any other commit, so it now waits for the next tag (or a manual run below)
+# before it reaches the site.
 on:
   push:
-    branches: [ main ]
-
-# Content commits from Sveltia CMS land on main like any other commit and should
-# deploy: the CMS writes to the repository, not to the host, so a deploy is what
-# puts new content and uploads on the server.
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -24,18 +28,20 @@ jobs:
             cd ${{ secrets.INFOMANIAK_SITE_PATH }}
 
             # Reset rather than pull so the host always matches the repository,
-            # which is the source of truth for content. Guest uploads under
-            # server/uploads/users/ are git-ignored and are left untouched.
-            git fetch origin main
-            git reset --hard origin/main
-
-            cd personal-site
+            # which is the source of truth for content. Checking out the exact
+            # commit this run was triggered for makes a tag push and a manual run
+            # behave identically. Unversioned host state - server/.env, guest
+            # uploads under server/uploads/users/, and the Spotify export in
+            # server/data/timeline_spotify.json - is untracked, so it is left
+            # untouched.
+            git fetch origin --prune --tags --force
+            git reset --hard ${{ github.sha }}
 
             # Installs the Angular, server and computer-app dependencies
             # (the root postinstall handles the last two).
             npm ci
 
-            # Builds dist/personal-site/browser and dist/computer, both served
+            # Builds dist/angular-mxrjup/browser and dist/computer, both served
             # by server/server.js.
             npm run build
 

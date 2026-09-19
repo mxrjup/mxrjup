@@ -11,7 +11,7 @@
 # Node
 node_modules/
 
-# Admin content is versioned in git (see server/gitStorage.js): the media files
+# Admin content is versioned in git: the media files
 # under server/uploads/ and the JSON content files under server/data/ are tracked.
 # Guest state from the Windows 95 computer page is NOT - it lives on the host disk only.
 server/uploads/users/
