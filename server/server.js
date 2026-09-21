@@ -12,6 +12,8 @@ const { inspectUpload, displayName, storedName, UploadRejected, SERVED_TYPES } =
 const {
     parseTrustProxy, createRateLimiters, chatMessageError, createMessageBudget, MAX_WS_PAYLOAD
 } = require('./abuseLimits');
+const { createContentUpdater, createContentHook } = require('./contentWebhook');
+const { scheduleDaily, runBackupScript } = require('./backupSchedule');
 
 const app = express();
 // Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
@@ -77,6 +79,14 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     next();
 });
+
+// GitHub calls this on every push to mxrjup-content, and the server pulls the content
+// itself (contentWebhook.js). Mounted ahead of the JSON parser: the signature covers
+// the exact bytes GitHub sent, so the body must reach the handler untouched.
+const contentUpdater = createContentUpdater({ dir: CONTENT_DIR });
+app.post('/api/hooks/content',
+    express.raw({ type: '*/*', limit: '1mb' }),
+    createContentHook({ secret: process.env.CONTENT_WEBHOOK_SECRET, updater: contentUpdater }));
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -624,6 +634,22 @@ function startWebSocket(server) {
     });
 }
 
+// The host has no crontab, so the server starts the nightly backup of the visitor data
+// itself, at VISITORS_BACKUP_AT (HH:MM, the host's local time). Unset means no backup,
+// which is what a development machine wants.
+function scheduleVisitorBackup() {
+    const at = process.env.VISITORS_BACKUP_AT;
+    if (!at) return;
+    const script = path.join(CODE_ROOT, 'scripts', 'backup-visitors.sh');
+    try {
+        scheduleDaily({ at, run: () => runBackupScript({ script, visitorsDir: VISITORS_DIR }) });
+        console.log(`Visitor data backup every day at ${at}`);
+    } catch (err) {
+        // A typo must not take the site down, but it must be seen.
+        console.error(`BACKUP FAILED: no nightly backup scheduled: ${err.message}`);
+    }
+}
+
 // Listen only once the visitor files exist, so the first request on an empty
 // VISITORS_DIR finds them.
 store.init().then(() => {
@@ -633,6 +659,7 @@ store.init().then(() => {
         console.log(`Server running on port ${server.address().port}`);
     });
     startWebSocket(server);
+    scheduleVisitorBackup();
 }).catch((err) => {
     console.error(`Cannot prepare the visitor data in ${VISITORS_DIR}:`, err);
     process.exit(1);
