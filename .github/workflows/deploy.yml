@@ -68,8 +68,14 @@ jobs:
           password: ${{ secrets.INFOMANIAK_SSH_PASSWORD }}
           # Passed on to the script below, which writes them to server/.env.
           envs: ENV_CONTENT_DIR,ENV_VISITORS_DIR,ENV_USER_UPLOADS_QUOTA_MB,ENV_MAX_FILE_SIZE_MB,ENV_TRUST_PROXY,ENV_NODE_ENV
+          # Infomaniak's SSH hands a command run without a terminal no working
+          # stderr: the first write to it (git fetch's progress) killed the deploy
+          # with SIGPIPE (exit 141) before any output. Ask for a terminal, and send
+          # stderr to stdout anyway so nothing depends on that second stream.
+          request_pty: true
           script: |
             set -e
+            exec 2>&1
             # Path of the code checkout on the host (CODE_DIR).
             cd "${{ secrets.INFOMANIAK_SITE_PATH }}"
 
