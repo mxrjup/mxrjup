@@ -1,16 +1,22 @@
 name: Deploy to Infomaniak
 
-# Deploys are cut deliberately, not by merging. Landing work on main changes
-# nothing on the host; pushing a tag is what says "this is the version to run".
+# Deploys the code, and only the code. Landing work on main changes nothing on the
+# host; pushing a tag is what says "this is the version to run". A manual run from
+# the Actions tab deploys the commit it was started on.
 #
-# Consequence worth knowing: content committed by Sveltia CMS lands on main like
-# any other commit, so it now waits for the next tag (or a manual run below)
-# before it reaches the site.
+# Content is not deployed from here: it lives in mxrjup/mxrjup-content, whose own
+# workflow pulls it into CONTENT_DIR on every push. Visitor data lives in
+# VISITORS_DIR. Both are outside the code checkout, so this workflow never sees them.
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+
+# Two deploys at once would race on the same checkout, node_modules and dist.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -24,28 +30,54 @@ jobs:
           key: ${{ secrets.INFOMANIAK_SSH_KEY }}
           script: |
             set -e
-            # Path of the repository checkout on the host.
-            cd ${{ secrets.INFOMANIAK_SITE_PATH }}
+            # Path of the code checkout on the host (CODE_DIR).
+            cd "${{ secrets.INFOMANIAK_SITE_PATH }}"
 
-            # Reset rather than pull so the host always matches the repository,
-            # which is the source of truth for content. Checking out the exact
-            # commit this run was triggered for makes a tag push and a manual run
-            # behave identically. Unversioned host state - server/.env, guest
-            # uploads under server/uploads/users/, and the Spotify export in
-            # server/data/timeline_spotify.json - is untracked, so it is left
-            # untouched.
-            git fetch origin --prune --tags --force
-            git reset --hard ${{ github.sha }}
+            # The server writes nothing here, so anything git reports - a hot-fix
+            # edited in place, a stray file - was put there by hand and exists
+            # nowhere else. Stop rather than overwrite it: whoever made it decides
+            # whether to commit it or throw it away. server/.env, node_modules/,
+            # dist/ and tmp/ are ignored and do not count.
+            changes="$(git status --porcelain)"
+            if [ -n "$changes" ]; then
+              echo "::error::The server has local changes in $PWD; nothing was deployed."
+              echo "$changes"
+              echo "Commit them or discard them on the host, then run the deploy again."
+              exit 1
+            fi
 
-            # Installs the Angular, server and computer-app dependencies
-            # (the root postinstall handles the last two).
+            # Move to the exact commit this run is for, so a tag push and a manual
+            # run behave the same. No --force and no reset: with a clean tree the
+            # checkout can only fail loudly, never discard anything.
+            git fetch origin --tags
+            if ! git cat-file -e "${{ github.sha }}^{commit}"; then
+              echo "::error::Commit ${{ github.sha }} is not on the host after the fetch."
+              exit 1
+            fi
+            git checkout --detach "${{ github.sha }}"
+
+            # Installs the Angular, server and computer-app dependencies (the root
+            # postinstall runs npm ci in the last two). npm ci never rewrites a
+            # lockfile: one out of step with its package.json fails here.
             npm ci
 
             # Builds dist/angular-mxrjup/browser and dist/computer, both served
             # by server/server.js.
             npm run build
 
-            # Restart the Node.js site so the new build is picked up.
+            # Whatever the install or build leaves behind must be git-ignored,
+            # otherwise the next deploy would refuse to run. Catch it now, while
+            # the cause is obvious. The new build is in place but not restarted.
+            changes="$(git status --porcelain)"
+            if [ -n "$changes" ]; then
+              echo "::error::The install or build changed tracked files or left untracked ones."
+              echo "$changes"
+              echo "Ignore or commit them in the repository and tag again."
+              exit 1
+            fi
+
+            # Restart the Node.js site so the new code and build are picked up.
             # Passenger-style hosts watch this file; if your site restarts
             # another way, replace this line with that command.
             mkdir -p tmp && touch tmp/restart.txt
+            echo "Deployed $(git rev-parse --short HEAD) (${{ github.ref_name }})."
