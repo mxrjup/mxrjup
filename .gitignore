@@ -11,18 +11,10 @@
 # Node
 node_modules/
 
-# Admin content is versioned in git: the media files
-# under server/uploads/ and the JSON content files under server/data/ are tracked.
-# Guest state from the Windows 95 computer page is NOT - it lives on the host disk only.
-server/uploads/users/
-server/data/computer_files.json
-server/data/chat_data.json
-
-# Nor is the Spotify saved-albums export: cron rewrites it on the host every week
-# (scripts/spotify-cron.sh), and the deploy's `git reset --hard` leaves untracked
-# files alone, so the repository and the cron never fight over the same file.
-# The albums you add by hand stay in server/data/timeline.json; the server merges
-# the two behind GET /api/data/timeline.
+# Content and visitor data live in their own repositories (mxrjup-content,
+# mxrjup-visitors). The one thing still written here is the Spotify export, whose
+# script defaults to server/data/ until the timeline sync moves to the content
+# repository - keep it out of commits meanwhile.
 server/data/timeline_spotify.json
 
 

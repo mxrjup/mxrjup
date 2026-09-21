@@ -4,33 +4,59 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { createVisitorStore, DEFAULT_COMPUTER_FILES } = require('./visitorStore');
 
 const app = express();
 // Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const BROWSER_DIR = path.join(__dirname, '../dist/angular-mxrjup/browser');
-const COMPUTER_DIR = path.join(__dirname, '../dist/computer');
+const CODE_ROOT = path.join(__dirname, '..');
+const BROWSER_DIR = path.join(CODE_ROOT, 'dist/angular-mxrjup/browser');
+const COMPUTER_DIR = path.join(CODE_ROOT, 'dist/computer');
 
-// Ensure directories exist
-(async () => {
-    try {
-        await fs.mkdir(DATA_DIR, { recursive: true });
-        await fs.mkdir(UPLOADS_DIR, { recursive: true });
-    } catch (err) {
-        console.error('Error creating directories:', err);
-    }
-})();
+// The server reads and writes nothing inside the code checkout. Content (the CMS's
+// JSON and media) and visitor data are separate repositories, checked out wherever
+// the host puts them. The defaults are the three repositories cloned side by side,
+// which is the local-dev layout; relative paths are resolved from the code root.
+const CONTENT_DIR = path.resolve(CODE_ROOT, process.env.CONTENT_DIR || '../mxrjup-content');
+const VISITORS_DIR = path.resolve(CODE_ROOT, process.env.VISITORS_DIR || '../mxrjup-visitors');
+const CONTENT_DATA_DIR = path.join(CONTENT_DIR, 'data');
+const CONTENT_UPLOADS_DIR = path.join(CONTENT_DIR, 'uploads');
+
+// Without content every page of the site is empty, and a wrong path is the likely
+// cause, so refuse to start rather than serve a blank site that looks healthy.
+if (!fsSync.existsSync(CONTENT_DATA_DIR)) {
+    console.error(
+        `No content at ${CONTENT_DATA_DIR}.\n` +
+        'Clone mxrjup/mxrjup-content there, or point CONTENT_DIR (server/.env) at its checkout.'
+    );
+    process.exit(1);
+}
+
+// Deploys replace the code checkout wholesale, and whatever the server wrote there
+// would go with it (or end up committed), so visitor data must live elsewhere.
+const relativeToCode = path.relative(CODE_ROOT, VISITORS_DIR);
+const outsideCode = relativeToCode === '..' || relativeToCode.startsWith(`..${path.sep}`);
+if (!outsideCode && !path.isAbsolute(relativeToCode)) {
+    console.error(`VISITORS_DIR (${VISITORS_DIR}) is inside the code checkout; point it outside.`);
+    process.exit(1);
+}
+
+const store = createVisitorStore(VISITORS_DIR);
 
 app.use(cors());
 app.use(bodyParser.json());
-app.use('/uploads', express.static(UPLOADS_DIR));
+// Visitor files and editorial media share the /uploads URL space but live in
+// different repositories. The more specific mount must come first, and a visitor
+// path that matches nothing stops here instead of falling through to the content.
+app.use('/uploads/users', express.static(store.uploadsDir));
+app.use('/uploads/users', (req, res) => res.sendStatus(404));
+app.use('/uploads', express.static(CONTENT_UPLOADS_DIR));
 
 // Generic Data Endpoints
 // Read-only: content is written by Sveltia CMS (/admin), which commits straight
-// to the repository. A deploy is what brings those commits onto this host.
+// to the content repository. Its checkout on this host is CONTENT_DIR.
 const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits'];
 
 /**
@@ -55,14 +81,13 @@ async function readItems(filePath) {
  * neither side ever overwrites the other:
  *   timeline.json          - albums added by hand in the CMS, versioned in git.
  *   timeline_spotify.json  - the saved-albums export, rewritten weekly by cron
- *                            (scripts/spotify-cron.sh) and NOT versioned, so the
- *                            deploy's `git reset --hard` leaves it alone.
+ *                            (scripts/spotify-cron.sh) and NOT versioned.
  * Titles are the timeline's identity, so a manual entry with the same title as a
  * Spotify one wins: that is how you correct what the export produced.
  */
 async function readTimeline() {
-    const spotify = await readItems(path.join(DATA_DIR, 'timeline_spotify.json'));
-    const manual = await readItems(path.join(DATA_DIR, 'timeline.json'));
+    const spotify = await readItems(path.join(CONTENT_DATA_DIR, 'timeline_spotify.json'));
+    const manual = await readItems(path.join(CONTENT_DATA_DIR, 'timeline.json'));
 
     const byTitle = new Map(spotify.map((item) => [item.title, item]));
     for (const item of manual) byTitle.set(item.title, item);
@@ -80,7 +105,7 @@ app.get('/api/data/:type', async (req, res) => {
     try {
         const items = type === 'timeline'
             ? await readTimeline()
-            : await readItems(path.join(DATA_DIR, `${type}.json`));
+            : await readItems(path.join(CONTENT_DATA_DIR, `${type}.json`));
         res.json(items);
     } catch (err) {
         res.status(500).json({ error: 'Error reading data' });
@@ -91,26 +116,13 @@ app.get('/api/data/:type', async (req, res) => {
 // WINDOWS 95 COMPUTER API
 // ============================================
 
-const fsSync = require('fs');
-const USER_UPLOADS_DIR = path.join(__dirname, 'uploads', 'users');
-const COMPUTER_FILES_JSON = path.join(__dirname, 'data', 'computer_files.json');
+const USER_UPLOADS_DIR = store.uploadsDir;
 const MAX_QUOTA_BYTES = (process.env.USER_UPLOADS_QUOTA_MB || 1000) * 1024 * 1024;
 const MAX_FILE_BYTES = (process.env.MAX_FILE_SIZE_MB || 10) * 1024 * 1024;
 
-const DEFAULT_COMPUTER_FILES = { files: [], folders: ['My Documents', 'My Pictures', 'My Music'] };
-
-// Ensure user uploads directory exists
-if (!fsSync.existsSync(USER_UPLOADS_DIR)) {
-    fsSync.mkdirSync(USER_UPLOADS_DIR, { recursive: true });
-}
-
-// Guest files are not versioned, so a fresh host starts without this file, and
-// every write route below reads it before writing. Create it up front so the
-// first upload or folder creation doesn't fail on a new deployment.
-if (!fsSync.existsSync(COMPUTER_FILES_JSON)) {
-    fsSync.mkdirSync(path.dirname(COMPUTER_FILES_JSON), { recursive: true });
-    fsSync.writeFileSync(COMPUTER_FILES_JSON, JSON.stringify(DEFAULT_COMPUTER_FILES, null, 2));
-}
+// A route handler's mutate callback returns this to answer with an error; the store
+// then writes nothing because the data did not change.
+const reject = (status, body) => ({ rejected: { status, body } });
 
 // Calculate total directory size
 function getDirectorySize(dirPath) {
@@ -145,14 +157,12 @@ app.get('/api/computer/quota', (req, res) => {
 // GET /api/computer/files - Get all files
 app.get('/api/computer/files', async (req, res) => {
     try {
-        const data = await fs.readFile(COMPUTER_FILES_JSON, 'utf8');
-        res.json(JSON.parse(data));
+        res.json(await store.readComputerFiles());
     } catch (err) {
         res.json(DEFAULT_COMPUTER_FILES);
     }
 });
 
-// POST /api/computer/folder - Create virtual folder
 // POST /api/computer/folder - Create virtual folder
 app.post('/api/computer/folder', async (req, res) => {
     try {
@@ -161,28 +171,29 @@ app.post('/api/computer/folder', async (req, res) => {
             return res.status(400).json({ error: 'Folder name required' });
         }
 
-        const data = JSON.parse(await fs.readFile(COMPUTER_FILES_JSON, 'utf8'));
+        const result = await store.updateComputerFiles((data) => {
+            // Check if folder already exists in the same parent
+            const exists = data.files.some(f => f.name === name && f.folder === (parentId || 'Desktop') && f.type === 'folder');
+            if (exists) {
+                return reject(400, { error: 'Folder already exists' });
+            }
 
-        // Check if folder already exists in the same parent
-        const exists = data.files.some(f => f.name === name && f.folder === (parentId || 'Desktop') && f.type === 'folder');
-        if (exists) {
-            return res.status(400).json({ error: 'Folder already exists' });
-        }
+            const newFolder = {
+                id: `folder-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+                name: name,
+                type: 'folder',
+                folder: parentId || 'Desktop', // This is the parent folder ID
+                pic: 'Project',
+                size: 0,
+                date: new Date().toISOString()
+            };
 
-        const newFolder = {
-            id: `folder-${Date.now()}-${Math.round(Math.random() * 1000)}`,
-            name: name,
-            type: 'folder',
-            folder: parentId || 'Desktop', // This is the parent folder ID
-            pic: 'Project',
-            size: 0,
-            date: new Date().toISOString()
-        };
+            data.files.push(newFolder);
+            return { folder: newFolder };
+        });
 
-        data.files.push(newFolder);
-        await fs.writeFile(COMPUTER_FILES_JSON, JSON.stringify(data, null, 2));
-
-        res.json({ success: true, folder: newFolder });
+        if (result.rejected) return res.status(result.rejected.status).json(result.rejected.body);
+        res.json({ success: true, folder: result.folder });
     } catch (err) {
         console.error('Error creating folder:', err);
         res.status(500).json({ error: 'Failed to create folder' });
@@ -223,7 +234,6 @@ app.post('/api/computer/upload', userUpload.single('file'), async (req, res) => 
         }
 
         // Save metadata
-        const filesData = JSON.parse(await fs.readFile(COMPUTER_FILES_JSON, 'utf8'));
         const fileEntry = {
             id: req.file.filename,
             name: req.file.originalname,
@@ -234,8 +244,9 @@ app.post('/api/computer/upload', userUpload.single('file'), async (req, res) => 
             created: new Date().toISOString()
         };
 
-        filesData.files.push(fileEntry);
-        await fs.writeFile(COMPUTER_FILES_JSON, JSON.stringify(filesData, null, 2));
+        await store.updateComputerFiles((data) => {
+            data.files.push(fileEntry);
+        });
 
         res.json({
             success: true,
@@ -262,19 +273,19 @@ app.put('/api/computer/file/:id', async (req, res) => {
             return res.status(400).json({ error: 'Folder is required' });
         }
 
-        const filesData = JSON.parse(await fs.readFile(COMPUTER_FILES_JSON, 'utf8'));
-        const fileIndex = filesData.files.findIndex(f => f.id === id);
+        const result = await store.updateComputerFiles((data) => {
+            const file = data.files.find(f => f.id === id);
+            if (!file) {
+                return reject(404, { error: 'File not found' });
+            }
 
-        if (fileIndex === -1) {
-            return res.status(404).json({ error: 'File not found' });
-        }
+            // Update folder
+            file.folder = folder;
+            return { file };
+        });
 
-        // Update folder
-        filesData.files[fileIndex].folder = folder;
-
-        await fs.writeFile(COMPUTER_FILES_JSON, JSON.stringify(filesData, null, 2));
-
-        res.json({ success: true, file: filesData.files[fileIndex] });
+        if (result.rejected) return res.status(result.rejected.status).json(result.rejected.body);
+        res.json({ success: true, file: result.file });
     } catch (error) {
         console.error('Update error:', error);
         res.status(500).json({ error: 'Update failed' });
@@ -286,98 +297,88 @@ app.delete('/api/computer/file/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Load metadata
-        const filesData = JSON.parse(await fs.readFile(COMPUTER_FILES_JSON, 'utf8'));
-        const file = filesData.files.find(f => f.id === id);
+        const result = await store.updateComputerFiles(async (data) => {
+            const file = data.files.find(f => f.id === id);
 
-        if (!file) {
-            return res.status(404).json({ error: 'File not found' });
-        }
+            if (!file) {
+                return reject(404, { error: 'File not found' });
+            }
 
-        // Delete actual file
-        const filePath = path.join(USER_UPLOADS_DIR, id);
-        try {
-            await fs.unlink(filePath);
-        } catch (err) {
-            console.log('File already deleted or not found:', id);
-        }
+            // Delete actual file
+            const filePath = path.join(USER_UPLOADS_DIR, id);
+            try {
+                await fs.unlink(filePath);
+            } catch (err) {
+                console.log('File already deleted or not found:', id);
+            }
 
-        // Remove from metadata
-        filesData.files = filesData.files.filter(f => f.id !== id);
-        await fs.writeFile(COMPUTER_FILES_JSON, JSON.stringify(filesData, null, 2));
+            // Remove from metadata
+            data.files = data.files.filter(f => f.id !== id);
+            return {};
+        });
 
+        if (result.rejected) return res.status(result.rejected.status).json(result.rejected.body);
         res.json({ success: true });
     } catch (error) {
         console.error('Delete error:', error);
         res.status(500).json({ error: 'Delete failed' });
     }
 });
+
 // DELETE /api/computer/folder/:name - Recursive Delete Folder
 app.delete('/api/computer/folder/:name', async (req, res) => {
     try {
         const { name } = req.params;
-        // console.log(`[API] Deleting folder recursively: ${name}`);
 
-        // Load metadata
-        const filesData = JSON.parse(await fs.readFile(COMPUTER_FILES_JSON, 'utf8'));
+        const deletedCount = await store.updateComputerFiles(async (filesData) => {
+            // Helper to find all children recursively
+            const idsToDelete = new Set();
+            const filesToDelete = [];
 
-        // Helper to find all children recursively
-        const idsToDelete = new Set();
-        const filesToDelete = [];
+            function findChildren(folderName) {
+                // Find files directly in this folder
+                const childrenFiles = filesData.files.filter(f => f.folder === folderName && f.type !== 'folder');
+                childrenFiles.forEach(f => {
+                    idsToDelete.add(f.id);
+                    if (f.id && !f.id.startsWith('folder-')) {
+                        filesToDelete.push(f.id); // Physical files to delete
+                    }
+                });
 
-        function findChildren(folderName) {
-            // Find files directly in this folder
-            const childrenFiles = filesData.files.filter(f => f.folder === folderName && f.type !== 'folder');
-            childrenFiles.forEach(f => {
-                idsToDelete.add(f.id);
-                if (f.id && !f.id.startsWith('folder-')) {
-                    filesToDelete.push(f.id); // Physical files to delete
-                }
-            });
-
-            // Find subfolders
-            const childrenFolders = filesData.files.filter(f => f.folder === folderName && f.type === 'folder');
-            childrenFolders.forEach(f => {
-                idsToDelete.add(f.id); // Delete the folder metadata too
-                // Recurse
-                findChildren(f.name);
-            });
-        }
-
-        // Start recursion
-        findChildren(name);
-
-        // console.log(`[API] Found ${filesToDelete.length} files and ${idsToDelete.size} items to delete.`);
-
-        // Delete physical files
-        for (const fileId of filesToDelete) {
-            const filePath = path.join(USER_UPLOADS_DIR, fileId);
-            try {
-                await fs.unlink(filePath);
-            } catch (err) {
-                console.log(`File already deleted or not found: ${fileId}`);
+                // Find subfolders
+                const childrenFolders = filesData.files.filter(f => f.folder === folderName && f.type === 'folder');
+                childrenFolders.forEach(f => {
+                    idsToDelete.add(f.id); // Delete the folder metadata too
+                    // Recurse
+                    findChildren(f.name);
+                });
             }
-        }
 
-        // Remove from metadata (All collected IDs + the folder itself if it exists in metadata, though folder name is passed)
-        // Note: The logic in App.jsx passes the NAME of the folder to delete.
-        // We also need to remove the folder entry itself if it exists in the root (or wherever it is) using its name/folder match?
-        // Actually, computer_files.json stores folders as items too.
-        // We should find the specific folder entry that matches 'name' and remove it too.
-        // But wait, the previous logic in App.jsx used 'name' to identify.
-        // Let's remove ANY item where name === 'name' and type === 'folder' as well?
-        // Or better yet, filter out anything that IS the target folder or IS IN the target folder (recursively found).
+            // Start recursion
+            findChildren(name);
 
-        // Remove specific folder entry (the root of deletion)
-        filesData.files = filesData.files.filter(f => {
-            if (f.name === name && f.type === 'folder') return false; // Delete the folder itself
-            if (idsToDelete.has(f.id)) return false; // Delete children
-            return true;
+            // Delete physical files
+            for (const fileId of filesToDelete) {
+                const filePath = path.join(USER_UPLOADS_DIR, fileId);
+                try {
+                    await fs.unlink(filePath);
+                } catch (err) {
+                    console.log(`File already deleted or not found: ${fileId}`);
+                }
+            }
+
+            // The client identifies the folder by name, so remove the folder entry
+            // itself along with everything found inside it.
+            filesData.files = filesData.files.filter(f => {
+                if (f.name === name && f.type === 'folder') return false; // Delete the folder itself
+                if (idsToDelete.has(f.id)) return false; // Delete children
+                return true;
+            });
+
+            return idsToDelete.size + 1;
         });
 
-        await fs.writeFile(COMPUTER_FILES_JSON, JSON.stringify(filesData, null, 2));
-
-        res.json({ success: true, deletedCount: idsToDelete.size + 1 });
+        res.json({ success: true, deletedCount });
     } catch (error) {
         console.error('Delete folder error:', error);
         res.status(500).json({ error: 'Delete folder failed' });
@@ -387,35 +388,11 @@ app.delete('/api/computer/folder/:name', async (req, res) => {
 // ============================================
 // MSN CHAT API
 // ============================================
-const CHAT_DATA_FILE = path.join(__dirname, 'data', 'chat_data.json');
-
-// Ensure chat data file exists
-(async () => {
-    try {
-        await fs.access(CHAT_DATA_FILE);
-    } catch {
-        const initialData = {
-            rooms: [
-                { id: "general", name: "General Chat", description: "Talk about anything and everything." },
-                { id: "tech", name: "Tech & Computers", "description": "Discuss hardware, software, and the future." },
-                { id: "music", name: "Music Lounge", "description": "Share your favorite tunes." },
-                { id: "gaming", "name": "Gamers Zone", "description": "Video games, tips, and tricks." }
-            ],
-            messages: {
-                general: [],
-                tech: [],
-                music: [],
-                gaming: []
-            }
-        };
-        await fs.writeFile(CHAT_DATA_FILE, JSON.stringify(initialData, null, 2));
-    }
-})();
 
 // GET /api/chat/rooms
 app.get('/api/chat/rooms', async (req, res) => {
     try {
-        const data = JSON.parse(await fs.readFile(CHAT_DATA_FILE, 'utf8'));
+        const data = await store.readChat();
         res.json(data.rooms);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch rooms' });
@@ -426,7 +403,7 @@ app.get('/api/chat/rooms', async (req, res) => {
 app.get('/api/chat/:room/messages', async (req, res) => {
     try {
         const { room } = req.params;
-        const data = JSON.parse(await fs.readFile(CHAT_DATA_FILE, 'utf8'));
+        const data = await store.readChat();
         res.json(data.messages[room] || []);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch messages' });
@@ -441,27 +418,7 @@ app.post('/api/chat/:room/messages', async (req, res) => {
 
         if (!user || !text) return res.status(400).json({ error: 'User and text required' });
 
-        const data = JSON.parse(await fs.readFile(CHAT_DATA_FILE, 'utf8'));
-
-        if (!data.messages[room]) data.messages[room] = [];
-
-        const newMessage = {
-            id: Date.now().toString(),
-            user,
-            text,
-            timestamp: new Date().toISOString()
-        };
-
-        data.messages[room].push(newMessage);
-
-        // Keep only last 50 messages per room to prevent infinite growth
-        if (data.messages[room].length > 50) {
-            data.messages[room] = data.messages[room].slice(-50);
-        }
-
-        await fs.writeFile(CHAT_DATA_FILE, JSON.stringify(data, null, 2));
-
-        res.json(newMessage);
+        res.json(await store.addChatMessage(room, user, text));
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to post message' });
@@ -503,80 +460,74 @@ app.get('*', (req, res, next) => {
     sendShell(res, next, BROWSER_DIR);
 });
 
-const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
-
 // ============================================
 // WEBSOCKET SERVER
 // ============================================
 const WebSocket = require('ws');
-// Explicitly define path to match Nginx location
-const wss = new WebSocket.Server({ server, path: '/ws' });
 
-// Debug: Log all upgrade requests to see if they reach the server
-server.on('upgrade', (request, socket, head) => {
-    console.log(`[DEBUG] HTTP Upgrade request received for: ${request.url}`);
-});
+function startWebSocket(server) {
+    // Explicitly define path to match Nginx location
+    const wss = new WebSocket.Server({ server, path: '/ws' });
 
-wss.on('connection', async (ws, req) => {
-    console.log(`[DEBUG] WebSocket Client connected from ${req.socket.remoteAddress}`);
+    // Debug: Log all upgrade requests to see if they reach the server
+    server.on('upgrade', (request, socket, head) => {
+        console.log(`[DEBUG] HTTP Upgrade request received for: ${request.url}`);
+    });
 
-    // Send full chat history on connection
-    try {
-        const data = JSON.parse(await fs.readFile(CHAT_DATA_FILE, 'utf8'));
-        ws.send(JSON.stringify({ type: 'history', data: data.messages['general'] || [] }));
-        // console.log('Sent history to new client');
-    } catch (e) {
-        console.error('Error sending history:', e);
-    }
+    wss.on('connection', async (ws, req) => {
+        console.log(`[DEBUG] WebSocket Client connected from ${req.socket.remoteAddress}`);
 
-    ws.on('message', async (message) => {
+        // Send full chat history on connection
         try {
-            const parsed = JSON.parse(message);
-
-            if (parsed.type === 'message') {
-                const { user, text } = parsed;
-                if (!user || !text) return;
-
-                // Save to file (reuse logic)
-                const data = JSON.parse(await fs.readFile(CHAT_DATA_FILE, 'utf8'));
-                if (!data.messages['general']) data.messages['general'] = [];
-
-                const newMessage = {
-                    id: Date.now().toString(),
-                    user,
-                    text,
-                    timestamp: new Date().toISOString()
-                };
-
-                data.messages['general'].push(newMessage);
-
-                // Keep last 50
-                if (data.messages['general'].length > 50) {
-                    data.messages['general'] = data.messages['general'].slice(-50);
-                }
-
-                await fs.writeFile(CHAT_DATA_FILE, JSON.stringify(data, null, 2));
-
-                // Broadcast to ALL clients (including sender)
-                const broadcastMsg = JSON.stringify({ type: 'message', data: newMessage });
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(broadcastMsg);
-                    }
-                });
-            }
+            const data = await store.readChat();
+            ws.send(JSON.stringify({ type: 'history', data: data.messages['general'] || [] }));
         } catch (e) {
-            console.error('WebSocket message error:', e);
+            console.error('Error sending history:', e);
         }
-    });
 
-    ws.on('error', (error) => {
-        console.error('[DEBUG] WebSocket client error:', error);
-    });
+        ws.on('message', async (message) => {
+            try {
+                const parsed = JSON.parse(message);
 
-    ws.on('close', () => {
-        console.log('[DEBUG] Client disconnected');
+                if (parsed.type === 'message') {
+                    const { user, text } = parsed;
+                    if (!user || !text) return;
+
+                    const newMessage = await store.addChatMessage('general', user, text);
+
+                    // Broadcast to ALL clients (including sender)
+                    const broadcastMsg = JSON.stringify({ type: 'message', data: newMessage });
+                    wss.clients.forEach(client => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(broadcastMsg);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('WebSocket message error:', e);
+            }
+        });
+
+        ws.on('error', (error) => {
+            console.error('[DEBUG] WebSocket client error:', error);
+        });
+
+        ws.on('close', () => {
+            console.log('[DEBUG] Client disconnected');
+        });
     });
+}
+
+// Listen only once the visitor files exist, so the first request on an empty
+// VISITORS_DIR finds them.
+store.init().then(() => {
+    const server = app.listen(PORT, () => {
+        console.log(`Content from ${CONTENT_DIR}`);
+        console.log(`Visitor data in ${VISITORS_DIR}`);
+        console.log(`Server running on port ${server.address().port}`);
+    });
+    startWebSocket(server);
+}).catch((err) => {
+    console.error(`Cannot prepare the visitor data in ${VISITORS_DIR}:`, err);
+    process.exit(1);
 });

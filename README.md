@@ -5,10 +5,45 @@ Personal site: an Angular front end, an Express server that also serves a React
 Generated with [Angular CLI](https://github.com/angular/angular-cli) 21.1.2.
 
 ```
-src/           Angular app            server/       Express: API, data, uploads
+src/           Angular app            server/       Express: API, visitor data store
 public/        static + /admin        computer-app/ React (Vite) Windows 95 app
 scripts/       Spotify timeline sync  dist/         build output (git-ignored)
 ```
+
+## Local setup
+
+The site is three repositories, one per owner, and this one holds only code:
+
+| Repository | Holds | Written by |
+| --- | --- | --- |
+| `mxrjup/mxrjup` (this one) | code | developers |
+| [`mxrjup/mxrjup-content`](https://github.com/mxrjup/mxrjup-content) | `data/*.json` and `uploads/` | Sveltia CMS, the Spotify sync |
+| `mxrjup/mxrjup-visitors` (private) | files, desktop index and chat of `/computer` | the server |
+
+Clone them side by side - that is where the server looks by default:
+
+```bash
+git clone git@github.com:mxrjup/mxrjup.git
+git clone git@github.com:mxrjup/mxrjup-content.git
+git clone git@github.com:mxrjup/mxrjup-visitors.git   # or just: mkdir mxrjup-visitors
+cd mxrjup && npm install
+npm run build:computer        # only if you want /computer served by the backend
+npm run start:backend         # http://localhost:3000
+```
+
+Elsewhere, set `CONTENT_DIR` and `VISITORS_DIR` in `server/.env` (absolute paths, or
+relative to the root of this repository). The server refuses to start if
+`CONTENT_DIR/data` is missing, or if `VISITORS_DIR` points inside this checkout. An empty
+or missing `VISITORS_DIR` is fine: the server creates `data/` and `uploads/` in it. Use
+a throwaway directory rather than a clone of the private repository if you do not need
+real visitor data.
+
+The server never writes inside this checkout. It reads content from `CONTENT_DIR`
+(`data/<type>.json` for `GET /api/data/<type>`, `uploads/` for `/uploads/*`) and keeps
+visitor data in `VISITORS_DIR` (`uploads/` for `/uploads/users/*`,
+`data/computer_files.json`, `data/chat_data.json`). Every write to the visitor files goes
+through `server/visitorStore.js`, which writes atomically and runs the updates of one
+file one at a time. `cd server && npm test` runs the server tests.
 
 ## Development server
 
@@ -27,6 +62,8 @@ The backend reads `server/.env`:
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `PORT` | no | `3000` | Managed hosting assigns this at runtime |
+| `CONTENT_DIR` | no | `../mxrjup-content` | Checkout of the content repository (must contain `data/`) |
+| `VISITORS_DIR` | no | `../mxrjup-visitors` | Where visitor uploads and data are written; outside this checkout |
 | `USER_UPLOADS_QUOTA_MB` | no | `1000` | Total quota for guest uploads on `/computer` |
 | `MAX_FILE_SIZE_MB` | no | `10` | Per-file cap on guest uploads |
 | `SPOTIFY_CLIENT_ID` | for the cron | - | Spotify app that reads your saved albums |
@@ -39,30 +76,30 @@ CMS, which authenticates against GitHub.
 ## Back office
 
 Content is edited with [Sveltia CMS](https://github.com/sveltia/sveltia-cms) at
-`/admin`, configured in `public/admin/config.yml`. It commits straight to this
-repository from the browser, so a content change is a commit and a deploy is what
-brings it onto the host.
+`/admin`, configured in `public/admin/config.yml`. It commits straight to the
+`mxrjup/mxrjup-content` repository from the browser, so a content change is a commit
+there, and the host's checkout of that repository is the server's `CONTENT_DIR`.
 
 Two things must be set up before it works:
 
 1. **An OAuth proxy.** Deploy [sveltia-cms-auth](https://github.com/sveltia/sveltia-cms-auth)
    to Cloudflare Workers (free), create a GitHub OAuth app pointing at it, and put the
    Worker URL in `backend.base_url` in `config.yml`. The CMS cannot log in without it.
-2. **Content files.** Each collection edits one file under `server/data/`. The CMS
-   stores entries under an `items` key, so a file looks like `{"items": [...]}`.
+2. **Content files.** Each collection edits one file under `data/` in the content
+   repository. The CMS stores entries under an `items` key, so a file looks like
+   `{"items": [...]}`.
 
-Uploads go to `server/uploads/` and are referenced as `/uploads/<file>`, which is what
-the server serves them at.
+Uploads go to `uploads/` in the content repository and are referenced as
+`/uploads/<file>`, which is what the server serves them at.
 
 ## Content storage
 
-Admin content is versioned in git: the JSON files under `server/data/` and the media
-under `server/uploads/` are tracked, and the CMS commits changes to them directly.
+Admin content is versioned in the public `mxrjup/mxrjup-content` repository (see
+*Local setup*), and the CMS commits changes to it directly.
 
-Guest uploads from the `/computer` page are deliberately *not* versioned: they are
-anonymous and this repository is public. They live on the host's disk under
-`server/uploads/users/`, with their index in `server/data/computer_files.json`, both
-git-ignored.
+Guest uploads from the `/computer` page are anonymous, so they stay out of the public
+repositories: they live in `VISITORS_DIR`, whose nightly backup is a commit to the
+private `mxrjup/mxrjup-visitors` repository.
 
 ## Music timeline
 
