@@ -67,9 +67,6 @@ The backend reads `server/.env`:
 | `USER_UPLOADS_QUOTA_MB` | no | `100` | Total quota for guest uploads on `/computer` |
 | `MAX_FILE_SIZE_MB` | no | `10` | Per-file cap on guest uploads |
 | `TRUST_PROXY` | no | `1` | Reverse proxies in front of the server, for the visitor's IP; see *Visitor uploads* |
-| `SPOTIFY_CLIENT_ID` | for the cron | - | Spotify app that reads your saved albums |
-| `SPOTIFY_CLIENT_SECRET` | for the cron | - | Same app; needed to refresh the token |
-| `SPOTIFY_REFRESH_TOKEN` | for the cron | - | Minted once, see *Music timeline* below |
 
 The server has no admin credentials: it only reads content. Editing happens in the
 CMS, which authenticates against GitHub.
@@ -213,24 +210,22 @@ same computer.
 
 ## Music timeline
 
-`/music/timeline` is two sources merged by the server:
+`/music/timeline` is one file, `data/timeline.json` of the content repository, served
+by `GET /api/data/timeline` like every other collection except that entries with
+`"hidden": true` are left out.
 
-- `server/data/timeline.json` - albums added by hand in the CMS, versioned here.
-- `server/data/timeline_spotify.json` - your saved Spotify albums, rewritten weekly
-  by `scripts/spotify-cron.sh` on the host. Git-ignored, so deploys leave it alone.
+The file is edited in the CMS and fed by a weekly workflow of the content repository
+(`.github/workflows/spotify-timeline.yml`, Mondays 05:17 UTC), which appends the albums
+saved in Spotify and publishes the result. It only ever adds: an album already listed
+(same `spotifyId`, or the same title ignoring case, accents and punctuation) is skipped,
+and no entry is changed or removed - an album gone from the library stays. To take one
+off the site, tick *Masquer* in the CMS instead of deleting it, or the sync adds it back.
 
-Entries are deduplicated by title and the manual side wins, which is how an album the
-export got wrong gets corrected. Set the cron up once:
-
-```bash
-node scripts/spotify-timeline.mjs --print-refresh-token   # on a machine with a browser
-```
-
-Put the printed line in `server/.env` on the host, then add to its crontab:
-
-```
-17 5 * * 1 /path/to/mxrjup/scripts/spotify-cron.sh >> /path/to/spotify-timeline.log 2>&1
-```
+The sync, its Spotify credentials (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
+`SPOTIFY_REFRESH_TOKEN`, now secrets of the content repository, no longer in
+`server/.env`) and its tests live in
+[`mxrjup/mxrjup-content`](https://github.com/mxrjup/mxrjup-content); its README has the
+setup. Nothing about it runs on the host.
 
 ## Deploying
 

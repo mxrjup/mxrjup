@@ -146,25 +146,6 @@ async function readItems(filePath) {
     }
 }
 
-/**
- * The music timeline comes from two places, merged here rather than in a file so
- * neither side ever overwrites the other:
- *   timeline.json          - albums added by hand in the CMS, versioned in git.
- *   timeline_spotify.json  - the saved-albums export, rewritten weekly by cron
- *                            (scripts/spotify-cron.sh) and NOT versioned.
- * Titles are the timeline's identity, so a manual entry with the same title as a
- * Spotify one wins: that is how you correct what the export produced.
- */
-async function readTimeline() {
-    const spotify = await readItems(path.join(CONTENT_DATA_DIR, 'timeline_spotify.json'));
-    const manual = await readItems(path.join(CONTENT_DATA_DIR, 'timeline.json'));
-
-    const byTitle = new Map(spotify.map((item) => [item.title, item]));
-    for (const item of manual) byTitle.set(item.title, item);
-
-    return [...byTitle.values()].sort((a, b) => String(b.date).localeCompare(String(a.date)));
-}
-
 // Get all data for a type
 app.get('/api/data/:type', async (req, res) => {
     const { type } = req.params;
@@ -173,9 +154,10 @@ app.get('/api/data/:type', async (req, res) => {
     }
 
     try {
-        const items = type === 'timeline'
-            ? await readTimeline()
-            : await readItems(path.join(CONTENT_DATA_DIR, `${type}.json`));
+        let items = await readItems(path.join(CONTENT_DATA_DIR, `${type}.json`));
+        // A hidden album stays in timeline.json so the weekly Spotify sync of the
+        // content repository does not add it back; it is only kept off the site.
+        if (type === 'timeline') items = items.filter((item) => item.hidden !== true);
         // The file is re-read on every request so a publish shows up at once; keep
         // browsers from answering from their cache instead (res.json sets the ETag).
         res.setHeader('Cache-Control', REVALIDATE);
