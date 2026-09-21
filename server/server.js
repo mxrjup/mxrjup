@@ -52,7 +52,14 @@ app.use(bodyParser.json());
 // path that matches nothing stops here instead of falling through to the content.
 app.use('/uploads/users', express.static(store.uploadsDir));
 app.use('/uploads/users', (req, res) => res.sendStatus(404));
-app.use('/uploads', express.static(CONTENT_UPLOADS_DIR));
+// Editorial media keep their name when replaced in the CMS, and a publish reaches the
+// disk in seconds, so browsers must revalidate (a cheap 304 via the ETag) rather than
+// show a stale image for however long a max-age would allow.
+const REVALIDATE = 'no-cache';
+app.use('/uploads', express.static(CONTENT_UPLOADS_DIR, {
+    cacheControl: false,
+    setHeaders: (res) => res.setHeader('Cache-Control', REVALIDATE)
+}));
 
 // Generic Data Endpoints
 // Read-only: content is written by Sveltia CMS (/admin), which commits straight
@@ -106,6 +113,9 @@ app.get('/api/data/:type', async (req, res) => {
         const items = type === 'timeline'
             ? await readTimeline()
             : await readItems(path.join(CONTENT_DATA_DIR, `${type}.json`));
+        // The file is re-read on every request so a publish shows up at once; keep
+        // browsers from answering from their cache instead (res.json sets the ETag).
+        res.setHeader('Cache-Control', REVALIDATE);
         res.json(items);
     } catch (err) {
         res.status(500).json({ error: 'Error reading data' });

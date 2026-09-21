@@ -3,6 +3,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('child_process');
+const http = require('http');
 const path = require('path');
 const os = require('os');
 const fs = require('fs').promises;
@@ -179,6 +180,39 @@ test('editorial media and visitor files keep their URLs', async () => {
     // A visitor URL never falls through to the content repository.
     assert.equal((await fetch(`${base}/uploads/users/cover.jpg`)).status, 404);
     assert.equal((await fetch(`${base}/uploads/missing.jpg`)).status, 404);
+});
+
+// A browser revalidating its copy. Not fetch(): per the Fetch spec a request carrying
+// If-None-Match is also sent with "Cache-Control: no-cache", which makes Express skip
+// the 304 - no browser does that on a normal revalidation.
+const conditionalStatus = (url, etag) => new Promise((resolve, reject) => {
+    http.get(base + url, { headers: { 'If-None-Match': etag } }, (res) => {
+        res.resume();
+        resolve(res.statusCode);
+    }).on('error', reject);
+});
+
+test('published content is revalidated, never served stale from cache', async () => {
+    for (const url of ['/api/data/reviews', '/api/data/timeline', '/uploads/cover.jpg']) {
+        const res = await fetch(base + url);
+        assert.equal(res.headers.get('cache-control'), 'no-cache', url);
+        const etag = res.headers.get('etag');
+        assert.ok(etag, `${url} has an ETag`);
+        assert.equal(await conditionalStatus(url, etag), 304, url);
+    }
+
+    // A publish rewrites the files in place: the next request sees the new version.
+    const cover = path.join(content, 'uploads', 'cover.jpg');
+    const before = (await fetch(`${base}/uploads/cover.jpg`)).headers.get('etag');
+    await fs.writeFile(cover, 'replaced image');
+    assert.equal(await conditionalStatus('/uploads/cover.jpg', before), 200);
+    assert.equal(await (await fetch(`${base}/uploads/cover.jpg`)).text(), 'replaced image');
+    await fs.writeFile(cover, 'editorial');
+
+    const credits = path.join(content, 'data', 'credits.json');
+    await fs.writeFile(credits, JSON.stringify({ items: [{ id: 'c1' }] }));
+    assert.deepEqual(await getJson('/api/data/credits'), [{ id: 'c1' }]);
+    await fs.writeFile(credits, JSON.stringify({ items: [] }));
 });
 
 test('20 chat messages sent at once over REST and WebSocket are all kept', async () => {
