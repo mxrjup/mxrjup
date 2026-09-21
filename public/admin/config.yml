@@ -1,6 +1,7 @@
 # Sveltia CMS - the back office for this site, served at /admin.
 #
-# Content is committed straight to this repository from the browser. The Express
+# Content is committed straight to the content repository (mxrjup/mxrjup-content,
+# not the code one this file lives in) from the browser. The Express
 # server only reads the resulting files, so there is no admin write API and no
 # server-side token.
 #
@@ -10,15 +11,16 @@
 
 backend:
   name: github
-  repo: mxrjup/mxrjup
+  repo: mxrjup/mxrjup-content
   branch: main
   # OAuth proxy that turns a GitHub login into a token. Deploy
   # https://github.com/sveltia/sveltia-cms-auth to Cloudflare Workers (free)
   # and put its URL here - the CMS cannot authenticate without it.
   base_url: https://REPLACE-WITH-YOUR-WORKER.workers.dev
 
-# Uploads land where the server already serves them from (/uploads).
-media_folder: server/uploads
+# Uploads land in the content repository's uploads/, which the server serves at
+# /uploads.
+media_folder: uploads
 public_folder: /uploads
 
 collections:
@@ -27,7 +29,7 @@ collections:
     files:
       - name: reviews
         label: Reviews
-        file: server/data/reviews.json
+        file: data/reviews.json
         description: Shown on /music, and individually on /music/review/:id
         fields:
           - name: items
@@ -68,7 +70,7 @@ collections:
     files:
       - name: timeline
         label: Timeline
-        file: server/data/timeline.json
+        file: data/timeline.json
         description: >-
           Albums added by hand on /music/timeline. The records saved in Spotify
           arrive on their own - a weekly cron on the host writes them to
@@ -105,7 +107,7 @@ collections:
     files:
       - name: media
         label: Media
-        file: server/data/media.json
+        file: data/media.json
         description: The grid on /media
         fields:
           - name: items
@@ -133,7 +135,7 @@ collections:
     files:
       - name: cool_stuff
         label: Cool stuff
-        file: server/data/cool_stuff.json
+        file: data/cool_stuff.json
         description: The grid on /cool-stuff. Tag colours come from the type.
         fields:
           - name: items
@@ -157,7 +159,7 @@ collections:
     files:
       - name: credits
         label: Credits
-        file: server/data/credits.json
+        file: data/credits.json
         description: Artwork credits on /credits
         fields:
           - name: items
