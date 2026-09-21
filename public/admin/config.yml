@@ -72,12 +72,13 @@ collections:
         label: Timeline
         file: data/timeline.json
         description: >-
-          Albums added by hand on /music/timeline. The records saved in Spotify
-          arrive on their own - a weekly cron on the host writes them to
-          timeline_spotify.json, which is not in this repository, and the server
-          serves the two lists merged. Add an album here only if it is not in
-          your Spotify library, or to override one: an entry whose title matches
-          a Spotify one replaces it.
+          Every album on /music/timeline. The records saved in Spotify are added
+          here every Monday by a workflow of the content repository, which only
+          appends: it never changes or removes an entry, so edit them freely. An
+          album already listed (same Spotify ID, or the same title ignoring case,
+          accents and punctuation) is not added again. To take one off the site,
+          tick Masquer rather than deleting it - a deleted album still in your
+          Spotify library comes back the next Monday.
         fields:
           - name: items
             label: Albums
@@ -101,6 +102,21 @@ collections:
                 time_format: false
                 hint: 'When the record came out - the card shows the year'
               - { name: cover, label: Cover image, widget: image, required: false }
+              - name: hidden
+                label: Masquer
+                widget: boolean
+                default: false
+                required: false
+                hint: 'Kept in the file, so the Spotify sync does not add it back, but not shown'
+              # Written by the Spotify sync, which recognizes the album by it. Declared
+              # so the CMS keeps it on save; read-only because an edited ID would let
+              # the sync add the album a second time.
+              - name: spotifyId
+                label: Spotify ID
+                widget: string
+                required: false
+                readonly: true
+                hint: 'Set by the Spotify sync - empty for albums added by hand'
 
   - name: media
     label: Media
