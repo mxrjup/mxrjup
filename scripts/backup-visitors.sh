@@ -86,17 +86,20 @@ mkdir "$LOCK" 2> /dev/null \
 trap 'rmdir "$LOCK"' EXIT
 trap 'fail "interrupted"' INT TERM HUP
 
-# The server writes each data file to a temporary sibling before renaming it over the
-# real one (server/visitorStore.js). One caught mid-write must never be committed,
-# so the rule lives in the repository itself, where every clone gets it.
-IGNORE_RULE='data/.*.tmp'
-if ! grep -qxF "$IGNORE_RULE" "$VISITORS_DIR/.gitignore" 2> /dev/null; then
-    log "adding '$IGNORE_RULE' to .gitignore"
-    {
-        echo '# Temporary files of the atomic writes in server/visitorStore.js'
-        echo "$IGNORE_RULE"
-    } >> "$VISITORS_DIR/.gitignore"
-fi
+# The server writes each data file and each uploaded file to a temporary sibling
+# before renaming it over the real one (writeFileAtomic in server/visitorStore.js).
+# One caught mid-write must never be committed, so the rules live in the repository
+# itself, where every clone gets them. Each is checked on its own: a clone backed up
+# before a rule existed gets the missing one added.
+for rule in 'data/.*.tmp' 'uploads/.*.tmp'; do
+    if ! grep -qxF "$rule" "$VISITORS_DIR/.gitignore" 2> /dev/null; then
+        log "adding '$rule' to .gitignore"
+        {
+            echo '# Temporary file of an atomic write (writeFileAtomic, server/visitorStore.js)'
+            echo "$rule"
+        } >> "$VISITORS_DIR/.gitignore"
+    fi
+done
 
 # Parse what is staged, not what is on disk: that is exactly what the commit would
 # hold. Prints the files that do not parse.

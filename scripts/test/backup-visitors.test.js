@@ -11,6 +11,8 @@ const fs = require('fs').promises;
 const CODE_ROOT = path.join(__dirname, '..', '..');
 const SCRIPT = path.join(CODE_ROOT, 'scripts', 'backup-visitors.sh');
 const SERVER = path.join(CODE_ROOT, 'server', 'server.js');
+// The server's own dependency, to make an image it accepts.
+const sharp = require(require.resolve('sharp', { paths: [path.join(CODE_ROOT, 'server')] }));
 
 // Keep the user's git configuration (signing, hooks, default branch) out of the test.
 const GIT_ENV = {
@@ -117,18 +119,25 @@ test('a run with nothing new creates no commit', async () => {
 });
 
 test('an upload is committed with the file and the index', async () => {
+    // Only real media is accepted, and images are re-encoded: compare what was
+    // committed with what the server stored, not with what was sent.
+    const png = await sharp({
+        create: { width: 8, height: 8, channels: 3, background: '#36c' }
+    }).png().toBuffer();
     const form = new FormData();
-    form.append('file', new Blob(['hello visitor']), 'hello.txt');
-    form.append('folder', 'My Documents');
+    form.append('file', new Blob([png], { type: 'image/png' }), 'hello.png');
+    form.append('folder', 'My Pictures');
     const res = await fetch(`${base}/api/computer/upload`, { method: 'POST', body: form });
-    assert.equal(res.status, 200);
+    assert.equal(res.status, 200, await res.clone().text());
     const { file } = await res.json();
 
     const { code, output } = await backup();
     assert.equal(code, 0, output);
     assert.equal(remoteCommits(), 2);
     assert.deepEqual(lastCommitFiles(), ['data/computer_files.json', `uploads/${file.id}`]);
-    assert.equal(git(remote, 'show', `main:uploads/${file.id}`), 'hello visitor');
+    const committed = execFileSync('git', ['show', `main:uploads/${file.id}`], { cwd: remote });
+    const stored = await fs.readFile(path.join(visitors, 'uploads', file.id));
+    assert.ok(committed.equals(stored), 'the committed file differs from the stored one');
 });
 
 test('temporary files of the atomic writes are never committed', async () => {
@@ -143,6 +152,46 @@ test('temporary files of the atomic writes are never committed', async () => {
     assert.equal(code, 0, output);
     assert.deepEqual(lastCommitFiles(), ['data/chat_data.json']);
     await fs.unlink(dataFile('.chat_data.json.123.abcdef.tmp'));
+});
+
+test('temporary files of uploads being written are never committed', async () => {
+    const partial = path.join(visitors, 'uploads', '.1-2-photo.jpg.123.abcdef.tmp');
+    await fs.writeFile(partial, 'half a photo');
+    await fs.writeFile(path.join(visitors, 'uploads', 'done.txt'), 'done');
+
+    const { code, output } = await backup();
+    assert.equal(code, 0, output);
+    assert.deepEqual(lastCommitFiles(), ['uploads/done.txt']);
+    await fs.unlink(partial);
+    await fs.unlink(path.join(visitors, 'uploads', 'done.txt'));
+    assert.equal((await backup()).code, 0);
+});
+
+test('a clone that only ignores data/ temporaries gets the uploads/ rule added', async () => {
+    // The .gitignore written by the first version of the script.
+    const gitignore = path.join(visitors, '.gitignore');
+    const oldRules = '# Temporary files of the atomic writes in server/visitorStore.js\n' +
+        'data/.*.tmp\n';
+    await fs.writeFile(gitignore, oldRules);
+    git(visitors, 'add', '.gitignore');
+    git(visitors, 'commit', '-q', '-m', 'Old rules');
+    git(visitors, 'push', '-q', 'origin', 'main');
+    const partial = path.join(visitors, 'uploads', '.big.bin.456.abcdef.tmp');
+    await fs.writeFile(partial, 'partial');
+
+    const { code, output } = await backup();
+    assert.equal(code, 0, output);
+    assert.match(output, /adding 'uploads\/\.\*\.tmp' to \.gitignore/);
+    assert.doesNotMatch(output, /adding 'data/);
+    assert.deepEqual(lastCommitFiles(), ['.gitignore']);
+    const rules = git(remote, 'show', 'main:.gitignore').split('\n');
+    assert.deepEqual(rules.filter((line) => !line.startsWith('#')), ['data/.*.tmp', 'uploads/.*.tmp']);
+
+    // Once there, the rule is not added again.
+    const again = await backup();
+    assert.equal(again.code, 0, again.output);
+    assert.doesNotMatch(again.output, /adding/);
+    await fs.unlink(partial);
 });
 
 test('invalid JSON fails without committing anything', async () => {
