@@ -52,13 +52,13 @@ before(async () => {
     await write('media.json', [{ id: 'm1', title: 'M' }]);
     await write('credits.json', { items: [] });
     await write('timeline.json', { items: [
-        { title: 'Manual', date: '2024-01-01' },
-        { title: 'Both', date: '2023-01-01', cover: 'manual.jpg' }
+        { title: 'Spotify', date: '2025-01-01', cover: 'https://i.scdn.co/x', spotifyId: 'x' },
+        { title: 'Hidden', date: '2024-06-01', spotifyId: 'h', hidden: true },
+        { title: 'Manual', date: '2024-01-01', hidden: false },
+        { title: 'Hidden manual', date: '2023-06-01', hidden: true }
     ] });
-    await write('timeline_spotify.json', { items: [
-        { title: 'Both', date: '2023-01-01', cover: 'spotify.jpg' },
-        { title: 'Spotify', date: '2025-01-01' }
-    ] });
+    // Left over from the old two-file timeline: must no longer be served.
+    await write('timeline_spotify.json', { items: [{ title: 'Stale', date: '2026-01-01' }] });
     await fs.writeFile(path.join(content, 'uploads', 'cover.jpg'), 'editorial');
 
     server = startServer({ CONTENT_DIR: content, VISITORS_DIR: visitors });
@@ -142,11 +142,10 @@ test('content is read from CONTENT_DIR, in both file shapes', async () => {
     assert.equal((await fetch(`${base}/api/data/computer_files`)).status, 400);
 });
 
-test('the timeline merges the Spotify export under the manual entries', async () => {
+test('the timeline is timeline.json alone, without its hidden entries', async () => {
     assert.deepEqual(await getJson('/api/data/timeline'), [
-        { title: 'Spotify', date: '2025-01-01' },
-        { title: 'Manual', date: '2024-01-01' },
-        { title: 'Both', date: '2023-01-01', cover: 'manual.jpg' }
+        { title: 'Spotify', date: '2025-01-01', cover: 'https://i.scdn.co/x', spotifyId: 'x' },
+        { title: 'Manual', date: '2024-01-01', hidden: false }
     ]);
 });
 

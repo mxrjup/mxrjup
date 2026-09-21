@@ -11,13 +11,6 @@
 # Node
 node_modules/
 
-# Content and visitor data live in their own repositories (mxrjup-content,
-# mxrjup-visitors). The one thing still written here is the Spotify export, whose
-# script defaults to server/data/ until the timeline sync moves to the content
-# repository - keep it out of commits meanwhile.
-server/data/timeline_spotify.json
-
-
 npm-debug.log
 yarn-error.log
 
