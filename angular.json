@@ -7,7 +7,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "personal-site": {
+    "angular-mxrjup": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -62,11 +62,11 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "personal-site:build:production"
+              "buildTarget": "angular-mxrjup:build:production"
             },
             "development": {
               "proxyConfig": "proxy.conf.json",
-              "buildTarget": "personal-site:build:development"
+              "buildTarget": "angular-mxrjup:build:development"
             }
           },
           "defaultConfiguration": "development"

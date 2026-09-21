@@ -11,10 +11,10 @@
 # are merged on top of these by the server.
 #
 # Crontab entry (weekly, Monday 05:17 - adjust the path to the checkout):
-#   17 5 * * 1 /path/to/personal-site/scripts/spotify-cron.sh >> /path/to/spotify-timeline.log 2>&1
+#   17 5 * * 1 /path/to/mxrjup/scripts/spotify-cron.sh >> /path/to/spotify-timeline.log 2>&1
 #
 # If cron runs with a bare PATH and cannot find node, give it the absolute path:
-#   17 5 * * 1 NODE_BIN=/usr/bin/node /path/to/personal-site/scripts/spotify-cron.sh >> ...
+#   17 5 * * 1 NODE_BIN=/usr/bin/node /path/to/mxrjup/scripts/spotify-cron.sh >> ...
 set -e
 
 cd "$(dirname "$0")/.."

@@ -247,7 +247,7 @@ async function main() {
             process.exit(1);
         }
         const token = await authorizeForRefreshToken(clientId, clientSecret);
-        console.log('\nAdd this line to personal-site/server/.env on the host:\n');
+        console.log('\nAdd this line to server/.env on the host:\n');
         console.log(`SPOTIFY_REFRESH_TOKEN=${token.refresh_token}`);
         console.log('\nIt does not expire. Treat it like a password: it reads your Spotify library.');
         return;

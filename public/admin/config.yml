@@ -18,7 +18,7 @@ backend:
   base_url: https://REPLACE-WITH-YOUR-WORKER.workers.dev
 
 # Uploads land where the server already serves them from (/uploads).
-media_folder: personal-site/server/uploads
+media_folder: server/uploads
 public_folder: /uploads
 
 collections:
@@ -27,7 +27,7 @@ collections:
     files:
       - name: reviews
         label: Reviews
-        file: personal-site/server/data/reviews.json
+        file: server/data/reviews.json
         description: Shown on /music, and individually on /music/review/:id
         fields:
           - name: items
@@ -68,7 +68,7 @@ collections:
     files:
       - name: timeline
         label: Timeline
-        file: personal-site/server/data/timeline.json
+        file: server/data/timeline.json
         description: >-
           Albums added by hand on /music/timeline. The records saved in Spotify
           arrive on their own - a weekly cron on the host writes them to
@@ -105,7 +105,7 @@ collections:
     files:
       - name: media
         label: Media
-        file: personal-site/server/data/media.json
+        file: server/data/media.json
         description: The grid on /media
         fields:
           - name: items
@@ -133,7 +133,7 @@ collections:
     files:
       - name: cool_stuff
         label: Cool stuff
-        file: personal-site/server/data/cool_stuff.json
+        file: server/data/cool_stuff.json
         description: The grid on /cool-stuff. Tag colours come from the type.
         fields:
           - name: items
@@ -157,7 +157,7 @@ collections:
     files:
       - name: credits
         label: Credits
-        file: personal-site/server/data/credits.json
+        file: server/data/credits.json
         description: Artwork credits on /credits
         fields:
           - name: items
