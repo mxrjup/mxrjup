@@ -9,9 +9,11 @@ name: Deploy to Infomaniak
 # VISITORS_DIR. Both are outside the code checkout, so this workflow never sees them.
 #
 # The server's configuration, server/.env, is written by this workflow from the
-# repository's Actions variables (Settings > Secrets and variables > Actions >
-# Variables), so GitHub is its only source and a new host needs no hand-written file.
-# None of it is secret. Infomaniak's Node.js sites take no SSH key, so the connection
+# repository's Actions secrets or variables (Settings > Secrets and variables >
+# Actions), so GitHub is its only source and a new host needs no hand-written file.
+# Each value is read from the secret of that name, else the variable: the paths
+# describe the host's layout and are kept as secrets, since this repository and its
+# workflow logs are public. Infomaniak's Node.js sites take no SSH key, so the connection
 # uses the password of the site's SSH user (INFOMANIAK_SSH_PASSWORD).
 on:
   push:
@@ -27,15 +29,16 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # What goes into server/.env. The two paths are required; the others fall back to
-    # the server's defaults when the variable is not set (see the README's table).
+    # What goes into server/.env, from the secret or else the variable of that name.
+    # The two paths are required; the others fall back to the server's defaults when
+    # neither is set (see the README's table).
     env:
-      ENV_CONTENT_DIR: ${{ vars.CONTENT_DIR }}
-      ENV_VISITORS_DIR: ${{ vars.VISITORS_DIR }}
-      ENV_USER_UPLOADS_QUOTA_MB: ${{ vars.USER_UPLOADS_QUOTA_MB }}
-      ENV_MAX_FILE_SIZE_MB: ${{ vars.MAX_FILE_SIZE_MB }}
-      ENV_TRUST_PROXY: ${{ vars.TRUST_PROXY }}
-      ENV_NODE_ENV: ${{ vars.NODE_ENV || 'production' }}
+      ENV_CONTENT_DIR: ${{ secrets.CONTENT_DIR || vars.CONTENT_DIR }}
+      ENV_VISITORS_DIR: ${{ secrets.VISITORS_DIR || vars.VISITORS_DIR }}
+      ENV_USER_UPLOADS_QUOTA_MB: ${{ secrets.USER_UPLOADS_QUOTA_MB || vars.USER_UPLOADS_QUOTA_MB }}
+      ENV_MAX_FILE_SIZE_MB: ${{ secrets.MAX_FILE_SIZE_MB || vars.MAX_FILE_SIZE_MB }}
+      ENV_TRUST_PROXY: ${{ secrets.TRUST_PROXY || vars.TRUST_PROXY }}
+      ENV_NODE_ENV: ${{ secrets.NODE_ENV || vars.NODE_ENV || 'production' }}
     steps:
       # Refuse a configuration the server would misread before touching the host: a
       # missing path would silently fall back to the local-dev default.
@@ -46,12 +49,12 @@ jobs:
           for name in ENV_CONTENT_DIR ENV_VISITORS_DIR; do
             case "${!name}" in
               /*) ;;
-              *) echo "::error::Set the ${name#ENV_} variable to an absolute path."; fail=1 ;;
+              *) echo "::error::Set the ${name#ENV_} secret to an absolute path."; fail=1 ;;
             esac
           done
           for name in ${!ENV_@}; do
             if [[ "${!name}" == *$'\n'* ]]; then
-              echo "::error::The ${name#ENV_} variable spans several lines."
+              echo "::error::The ${name#ENV_} value spans several lines."
               fail=1
             fi
           done
@@ -119,7 +122,7 @@ jobs:
             mkdir -p tmp
             {
               echo '# Written by .github/workflows/deploy.yml from the repository'"'"'s'
-              echo '# Actions variables. Edit them on GitHub, not here: the next deploy'
+              echo '# Actions secrets and variables. Edit them on GitHub, not here: the next deploy'
               echo '# overwrites this file.'
               for name in CONTENT_DIR VISITORS_DIR USER_UPLOADS_QUOTA_MB MAX_FILE_SIZE_MB \
                   TRUST_PROXY NODE_ENV; do
@@ -128,8 +131,9 @@ jobs:
               done
             } > tmp/server.env
             mv tmp/server.env server/.env
-            echo "Wrote server/.env:"
-            sed 's/^/  /' server/.env
+            # Names only: the log of a public repository is public, and the paths
+            # are kept secret.
+            echo "Wrote server/.env: $(grep -o '^[A-Z_]*' server/.env | tr '\n' ' ')"
 
             # Restart the Node.js site so the new code, build and configuration are
             # picked up. Passenger-style hosts watch this file; if the site does not
