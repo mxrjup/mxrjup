@@ -64,8 +64,9 @@ The backend reads `server/.env`:
 | `PORT` | no | `3000` | Managed hosting assigns this at runtime |
 | `CONTENT_DIR` | no | `../mxrjup-content` | Checkout of the content repository (must contain `data/`) |
 | `VISITORS_DIR` | no | `../mxrjup-visitors` | Where visitor uploads and data are written; outside this checkout. Also read by the nightly backup |
-| `USER_UPLOADS_QUOTA_MB` | no | `1000` | Total quota for guest uploads on `/computer` |
+| `USER_UPLOADS_QUOTA_MB` | no | `100` | Total quota for guest uploads on `/computer` |
 | `MAX_FILE_SIZE_MB` | no | `10` | Per-file cap on guest uploads |
+| `TRUST_PROXY` | no | `1` | Reverse proxies in front of the server, for the visitor's IP; see *Visitor uploads* |
 | `SPOTIFY_CLIENT_ID` | for the cron | - | Spotify app that reads your saved albums |
 | `SPOTIFY_CLIENT_SECRET` | for the cron | - | Same app; needed to refresh the token |
 | `SPOTIFY_REFRESH_TOKEN` | for the cron | - | Minted once, see *Music timeline* below |
@@ -100,6 +101,58 @@ Admin content is versioned in the public `mxrjup/mxrjup-content` repository (see
 Guest uploads from the `/computer` page are anonymous, so they stay out of the public
 repositories: they live in `VISITORS_DIR`, whose nightly backup is a commit to the
 private `mxrjup/mxrjup-visitors` repository.
+
+## Visitor uploads
+
+Anyone can put a file on `/computer`, and it is served from this domain, so the server
+decides what gets in (`server/uploadPolicy.js`) and how it is served (`server/server.js`):
+
+- **Received in memory.** Nothing is written to disk until every check below has passed,
+  so a refused file is never on disk, not even in a temporary directory.
+- **Type from the bytes.** [`file-type`](https://github.com/sindresorhus/file-type) reads
+  the file's signature; the name and the `Content-Type` the browser sent are ignored.
+  Accepted: JPEG, PNG, GIF, WebP (the photo viewer), MP3, OGG, WAV, MP4 and WebM (played
+  by the browser in the Internet window). Everything else is a 415, SVG, HTML, XML and
+  PDF included. A file that also contains markup (`<script`, `<html`, `<svg`...) is
+  refused too, so a polyglot is not left to the headers alone.
+- **Images are re-encoded** with [`sharp`](https://sharp.pixelplumbing.com/) and only the
+  copy is kept: no EXIF (GPS position included), no metadata, no trailing data. The EXIF
+  orientation is applied to the pixels first; animated GIF and WebP keep their frames.
+  An image sharp cannot decode, or whose format disagrees with its signature, is refused.
+- **Audio and video are kept as sent.** Re-encoding them would need ffmpeg on the host;
+  a checked signature, a fixed `Content-Type` and the headers below are enough for files
+  the browser only ever plays.
+- **Names.** The file is stored as `<32 random hex>.<extension of the detected type>`.
+  The visitor's name is kept in the index for display only, without its path, control
+  characters or bidi overrides, and cut to 100 characters.
+- **Quota.** Usage is the sum of the sizes in the desktop index. A request whose
+  `Content-Length` would not fit is refused before its body is read; the real size is
+  checked again in the same serialized index update that writes the file, so two uploads
+  racing each other cannot both take the last free space. Both answer 413.
+- **Headers.** Everything under `/uploads/users/` is served with `nosniff`,
+  `Content-Security-Policy: default-src 'none'; sandbox`, `Cross-Origin-Resource-Policy:
+  same-origin` and a `Content-Type` from the extension. A file with any other extension
+  (uploaded before these rules) is sent as `application/octet-stream`, as an attachment.
+  The rest of the site gets `nosniff` too.
+- **Rate limits, per IP**: 10 uploads per 15 minutes, 20 chat messages per minute over
+  REST, 30 deletes/moves/folder creations per 15 minutes; then 429. A WebSocket connection
+  may send 20 messages a minute, in frames of at most 4 KB (a larger one closes it). Chat
+  messages are capped at 500 characters and names at 30, over REST and WebSocket alike.
+
+The rate limits count by `req.ip`, which is only the visitor's address if Express knows
+how many proxies stand in front of the server: otherwise every visitor shares the
+proxy's address, and one budget. `TRUST_PROXY` is that number (`1` by default, the
+host's reverse proxy). On each start, the server logs one `Proxy check:` line for its
+first request, with the address it came from and the number of `X-Forwarded-For`
+entries: `TRUST_PROXY` must equal that number. Too high, and a visitor can pick their own
+address by sending the header; `true` is refused for that reason.
+
+`sharp` is the one native dependency. It ships prebuilt binaries (Node-API, so not tied
+to a Node version) for linux-x64 with glibc 2.28 or later, and for musl; nothing is
+compiled on install. `file-type` is ESM-only and is loaded with a dynamic `import()`.
+
+`VISITORS_DIR` must not be inside a directory the host serves itself (a PHP or static
+web root): only this server's headers make the files safe.
 
 ## Visitor data backup and restore
 
