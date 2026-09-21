@@ -63,7 +63,7 @@ The backend reads `server/.env`:
 | --- | --- | --- | --- |
 | `PORT` | no | `3000` | Managed hosting assigns this at runtime |
 | `CONTENT_DIR` | no | `../mxrjup-content` | Checkout of the content repository (must contain `data/`) |
-| `VISITORS_DIR` | no | `../mxrjup-visitors` | Where visitor uploads and data are written; outside this checkout |
+| `VISITORS_DIR` | no | `../mxrjup-visitors` | Where visitor uploads and data are written; outside this checkout. Also read by the nightly backup |
 | `USER_UPLOADS_QUOTA_MB` | no | `1000` | Total quota for guest uploads on `/computer` |
 | `MAX_FILE_SIZE_MB` | no | `10` | Per-file cap on guest uploads |
 | `SPOTIFY_CLIENT_ID` | for the cron | - | Spotify app that reads your saved albums |
@@ -100,6 +100,62 @@ Admin content is versioned in the public `mxrjup/mxrjup-content` repository (see
 Guest uploads from the `/computer` page are anonymous, so they stay out of the public
 repositories: they live in `VISITORS_DIR`, whose nightly backup is a commit to the
 private `mxrjup/mxrjup-visitors` repository.
+
+## Visitor data backup and restore
+
+On the host, `VISITORS_DIR` is a clone of the private `mxrjup/mxrjup-visitors`
+repository, and `scripts/backup-visitors.sh` commits it every night:
+
+```
+30 3 * * * /path/to/mxrjup/scripts/backup-visitors.sh >> /path/to/backup-visitors.log 2>&1
+```
+
+Each run:
+
+1. reads `VISITORS_DIR` from the environment, then `server/.env` (without sourcing it),
+   then the `../mxrjup-visitors` default, like the server;
+2. refuses to run unless `VISITORS_DIR` is the root of its own clone, on a branch, with
+   an `origin` remote, and holds `data/computer_files.json` and `data/chat_data.json` -
+   so a wrong path is never committed as "every visitor file was deleted";
+3. makes sure `.gitignore` in the clone excludes `data/.*.tmp`, the temporary files of
+   the server's atomic writes;
+4. stages everything (`git add -A`) and parses every staged `data/*.json`. If one does
+   not parse, it unstages, waits and tries again (`BACKUP_ATTEMPTS`, default 3, every
+   `BACKUP_RETRY_DELAY` seconds, default 10), then gives up without committing;
+5. commits only if something changed, as `mxrjup backup`, with a UTC timestamp;
+6. pushes, on every run, so a night whose push failed is sent the next night. It never
+   pulls, merges or forces: if the push is rejected, someone pushed to the repository by
+   hand, and that is sorted out by hand in the clone.
+
+Every failure exits non-zero with a line starting with `BACKUP FAILED:` in the log.
+`NODE_BIN` and `GIT_BIN` point cron at `node` and `git` if its `PATH` lacks them. The
+push goes over SSH with a deploy key restricted to that one repository, through a host
+alias (`git@github.com-mxrjup-visitors:mxrjup/mxrjup-visitors.git`) so it does not
+interfere with the host's other keys.
+
+A file being uploaded at 03:30 may be committed half-written. It is not in the desktop
+index yet, and the next night's backup commits it whole (or its deletion).
+
+**Size.** Git keeps every version of every file, including the ones visitors deleted,
+so the repository grows with everything ever uploaded, not with the 100 MB quota. At
+that scale it is acceptable; if it ever is not, the history can be squashed to the
+current state (a force push, done by hand, on this repository only).
+
+**Restoring on a new host.** Clone the repository where `VISITORS_DIR` points, then
+start the server; nothing else is needed:
+
+```bash
+git clone git@github.com-mxrjup-visitors:mxrjup/mxrjup-visitors.git /path/to/visitors
+# VISITORS_DIR=/path/to/visitors in server/.env, then start or restart the server
+```
+
+The server recreates the empty `uploads/` directory git does not keep. Install the
+deploy key and the crontab line above before the first night.
+
+`node --test scripts/test/*.test.js` (after `cd server && npm ci`) checks all of this
+against a local bare repository with the real server: no commit when nothing changed, an
+upload committed with its index entry, invalid JSON refused, and a fresh clone serving the
+same computer.
 
 ## Music timeline
 
