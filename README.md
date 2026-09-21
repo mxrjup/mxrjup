@@ -170,8 +170,8 @@ Each run:
 2. refuses to run unless `VISITORS_DIR` is the root of its own clone, on a branch, with
    an `origin` remote, and holds `data/computer_files.json` and `data/chat_data.json` -
    so a wrong path is never committed as "every visitor file was deleted";
-3. makes sure `.gitignore` in the clone excludes `data/.*.tmp`, the temporary files of
-   the server's atomic writes;
+3. makes sure `.gitignore` in the clone excludes `data/.*.tmp` and `uploads/.*.tmp`, the
+   temporary files of the server's atomic writes, adding whichever rule is missing;
 4. stages everything (`git add -A`) and parses every staged `data/*.json`. If one does
    not parse, it unstages, waits and tries again (`BACKUP_ATTEMPTS`, default 3, every
    `BACKUP_RETRY_DELAY` seconds, default 10), then gives up without committing;
@@ -186,8 +186,9 @@ push goes over SSH with a deploy key restricted to that one repository, through 
 alias (`git@github.com-mxrjup-visitors:mxrjup/mxrjup-visitors.git`) so it does not
 interfere with the host's other keys.
 
-A file being uploaded at 03:30 may be committed half-written. It is not in the desktop
-index yet, and the next night's backup commits it whole (or its deletion).
+An upload lands in `uploads/` in one atomic rename, so a backup never sees it
+half-written. One stored between the index update and the commit may be committed
+without its index entry, or the other way round; the next night's backup catches up.
 
 **Size.** Git keeps every version of every file, including the ones visitors deleted,
 so the repository grows with everything ever uploaded, not with the 100 MB quota. At
