@@ -10,7 +10,7 @@
     "build:angular": "ng build",
     "build:computer": "cd computer-app && npm run build",
     "build": "npm run build:angular && npm run build:computer",
-    "postinstall": "cd server && npm install && cd ../computer-app && npm install",
+    "postinstall": "cd server && npm ci && cd ../computer-app && npm ci",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
