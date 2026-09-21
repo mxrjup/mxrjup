@@ -426,6 +426,14 @@ test('visitor files are served with locked-down headers', async () => {
     assert.equal(legacy.headers.get('content-security-policy'), "default-src 'none'; sandbox");
     await fs.unlink(legacyPath);
 
+    // Photos uploaded before the rules kept ".jpeg", which the server no longer picks.
+    const photoPath = path.join(visitors, 'uploads', '1700000000-2-photo.JPEG');
+    await fs.writeFile(photoPath, await sharp(await makePng()).jpeg().toBuffer());
+    const photo = await fetch(`${base}/uploads/users/1700000000-2-photo.JPEG`);
+    assert.equal(photo.headers.get('content-type'), 'image/jpeg');
+    assert.equal(photo.headers.get('content-disposition'), null);
+    await fs.unlink(photoPath);
+
     // The rest of the site gets nosniff too.
     const api = await fetch(`${base}/api/data/reviews`);
     assert.equal(api.headers.get('x-content-type-options'), 'nosniff');

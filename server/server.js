@@ -93,9 +93,13 @@ app.use('/uploads/users', (req, res, next) => {
 
 // The Content-Type comes from the extension, which the server chose from the
 // detected type (uploadPolicy.js), never from what the file looks like. Files from
-// before that rule have other extensions and are only offered as downloads.
+// before that rule kept the visitor's extension: ".jpeg" photos still display (the
+// type is fixed and nosniff holds whatever they contain), anything else is only
+// offered as a download.
+const LEGACY_TYPES = { jpeg: 'image/jpeg' };
 function visitorFileHeaders(res, filePath) {
-    const type = SERVED_TYPES[path.extname(filePath).slice(1).toLowerCase()];
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const type = SERVED_TYPES[ext] || LEGACY_TYPES[ext];
     res.setHeader('Content-Type', type || 'application/octet-stream');
     if (!type) res.setHeader('Content-Disposition', 'attachment');
 }
