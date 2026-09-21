@@ -8,6 +8,7 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs').promises;
 const WebSocket = require('ws');
+const sharp = require('sharp');
 
 const SERVER = path.join(__dirname, '..', 'server.js');
 
@@ -70,11 +71,48 @@ after(async () => {
 });
 
 const getJson = async (url) => (await fetch(base + url)).json();
-const postJson = (url, body) => fetch(base + url, {
+const postJson = (url, body, ip) => fetch(base + url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...forwardedFor(ip) },
     body: JSON.stringify(body)
 });
+
+// The server trusts one proxy hop (TRUST_PROXY defaults to 1), so X-Forwarded-For is
+// the visitor's address as the rate limits see it. Tests that would otherwise share
+// a budget each come from their own address.
+let ipCounter = 0;
+const freshIp = () => {
+    ipCounter += 1;
+    return `10.${(ipCounter >> 16) & 255}.${(ipCounter >> 8) & 255}.${ipCounter & 255}`;
+};
+const forwardedFor = (ip) => (ip ? { 'X-Forwarded-For': ip } : {});
+
+function upload(data, filename, { ip, folder, url = base } = {}) {
+    const form = new FormData();
+    form.append('file', new Blob([data]), filename);
+    if (folder) form.append('folder', folder);
+    return fetch(`${url}/api/computer/upload`, {
+        method: 'POST',
+        headers: forwardedFor(ip || freshIp()),
+        body: form
+    });
+}
+
+const makePng = (options = {}) => {
+    const size = options.size || 16;
+    let image = sharp({ create: {
+        width: size,
+        height: size,
+        channels: 3,
+        background: '#36c',
+        // Noise keeps the PNG from compressing to nothing, for tests that need bulk.
+        ...(options.noise ? { noise: { type: 'gaussian', mean: 128, sigma: 60 } } : {})
+    } }).png();
+    if (options.exif) image = image.withExif(options.exif);
+    return image.toBuffer();
+};
+
+const uploadedFiles = () => fs.readdir(path.join(visitors, 'uploads'));
 
 test('refuses to start without content', async () => {
     const missing = startServer({
@@ -129,20 +167,29 @@ test('the computer works: folders, upload, move, delete', async () => {
     res = await postJson('/api/computer/folder', { name: 'Stuff' });
     assert.equal(res.status, 400);
 
-    const form = new FormData();
-    form.append('file', new Blob(['hello visitor']), 'hello.txt');
-    form.append('folder', 'Stuff');
-    res = await fetch(`${base}/api/computer/upload`, { method: 'POST', body: form });
+    res = await upload(await makePng(), 'holiday.png', { folder: 'Stuff' });
     assert.equal(res.status, 200);
-    const { file } = await res.json();
-    assert.match(file.path, /^\/uploads\/users\/.+-hello\.txt$/);
-    assert.deepEqual(await fs.readdir(path.join(visitors, 'uploads')), [file.id]);
+    const { success, file } = await res.json();
+    assert.equal(success, true);
+    assert.match(file.id, /^[0-9a-f]{32}\.png$/);
+    assert.equal(file.path, `/uploads/users/${file.id}`);
+    assert.equal(file.name, 'holiday.png');
+    assert.equal(file.mimeType, 'image/png');
+    assert.equal(file.folder, 'Stuff');
+    assert.deepEqual(await uploadedFiles(), [file.id]);
+    const indexed = (await getJson('/api/computer/files')).files.find((f) => f.id === file.id);
+    assert.deepEqual(indexed, file);
 
-    // Served at the same URL as before the split.
+    // Served at the same URL as before the split: the re-encoded copy, as a PNG.
     res = await fetch(base + file.path);
     assert.equal(res.status, 200);
-    assert.equal(await res.text(), 'hello visitor');
-    assert.equal((await getJson('/api/computer/quota')).used, 13);
+    assert.equal(res.headers.get('content-type'), 'image/png');
+    const served = Buffer.from(await res.arrayBuffer());
+    assert.equal(served.length, file.size);
+    assert.equal((await sharp(served).metadata()).format, 'png');
+    const quota = await getJson('/api/computer/quota');
+    assert.equal(quota.used, file.size);
+    assert.equal(quota.total, 100 * 1024 * 1024);
 
     res = await fetch(`${base}/api/computer/file/${file.id}`, {
         method: 'PUT',
@@ -240,7 +287,8 @@ test('20 chat messages sent at once over REST and WebSocket are all kept', async
         if (i % 2) {
             sockets[i >> 1].send(JSON.stringify({ type: 'message', user: `ws${i}`, text }));
         } else {
-            rest.push(postJson('/api/chat/general/messages', { user: `rest${i}`, text }));
+            const message = { user: `rest${i}`, text };
+            rest.push(postJson('/api/chat/general/messages', message, freshIp()));
         }
     });
     const restReplies = await Promise.all(rest);
@@ -256,9 +304,11 @@ test('20 chat messages sent at once over REST and WebSocket are all kept', async
 });
 
 test('the chat keeps only the last 50 messages of a room', async () => {
-    await Promise.all(Array.from({ length: 60 }, (_, i) =>
-        postJson('/api/chat/music/messages', { user: 'u', text: `n${i}` })
+    // From 60 addresses: one would hit the rate limit after 20.
+    const replies = await Promise.all(Array.from({ length: 60 }, (_, i) =>
+        postJson('/api/chat/music/messages', { user: 'u', text: `n${i}` }, freshIp())
     ));
+    assert.ok(replies.every((r) => r.status === 200));
     const saved = await getJson('/api/chat/music/messages');
     assert.equal(saved.length, 50);
     assert.equal(new Set(saved.map((m) => m.text)).size, 50);
@@ -267,4 +317,270 @@ test('the chat keeps only the last 50 messages of a room', async () => {
 test('nothing is left half-written in the visitor data', async () => {
     const leftovers = (await fs.readdir(path.join(visitors, 'data'))).filter((f) => f.endsWith('.tmp'));
     assert.deepEqual(leftovers, []);
+});
+
+// ============================================
+// UPLOAD SECURITY
+// ============================================
+
+test('a real PNG is accepted, re-encoded, and its EXIF is gone', async () => {
+    const input = await makePng({ exif: { IFD0: { Copyright: 'OWNER-SECRET' } } });
+    assert.ok(input.includes('OWNER-SECRET'));
+
+    const res = await upload(input, 'me.png');
+    assert.equal(res.status, 200);
+    const { file } = await res.json();
+
+    const stored = await fs.readFile(path.join(visitors, 'uploads', file.id));
+    assert.ok(!stored.equals(input), 'the bytes received are not the bytes served');
+    assert.ok(!stored.includes('OWNER-SECRET'));
+    assert.equal((await sharp(stored).metadata()).exif, undefined);
+    assert.equal(file.size, stored.length);
+});
+
+test('audio and video are accepted and served with their detected type', async () => {
+    const fixtures = path.join(__dirname, 'fixtures');
+    for (const [name, type] of [['tone.mp3', 'audio/mpeg'], ['clip.webm', 'video/webm']]) {
+        // A misleading name changes nothing: the bytes decide.
+        const res = await upload(await fs.readFile(path.join(fixtures, name)), 'song.html');
+        assert.equal(res.status, 200, name);
+        const { file } = await res.json();
+        assert.equal(file.mimeType, type);
+        assert.equal(file.name, 'song.html');
+        const served = await fetch(base + file.path);
+        assert.equal(served.headers.get('content-type'), type);
+    }
+});
+
+test('HTML renamed to .png, SVG, and a polyglot are refused and never stored', async () => {
+    const before = await uploadedFiles();
+    const polyglot = Buffer.concat([await makePng(), Buffer.from('<script>alert(1)</script>')]);
+    const cases = [
+        ['<html><script>alert(document.cookie)</script></html>', 'cute-cat.png'],
+        ['<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'logo.svg'],
+        [polyglot, 'photo.png']
+    ];
+    for (const [data, name] of cases) {
+        const res = await upload(data, name);
+        assert.equal(res.status, 415, name);
+        assert.match((await res.json()).error, /not accepted/);
+    }
+    assert.deepEqual(await uploadedFiles(), before);
+});
+
+function uploadRaw(disposition, data) {
+    const boundary = 'x-boundary';
+    const body = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; ` +
+            `${disposition}\r\nContent-Type: text/html\r\n\r\n`),
+        data,
+        Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+    return fetch(`${base}/api/computer/upload`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            ...forwardedFor(freshIp())
+        },
+        body
+    });
+}
+
+test('a malicious original name is only a display name', async () => {
+    // Control characters cannot appear raw in a header, but the RFC 5987 form of the
+    // parameter, which the parser decodes, can carry any byte.
+    const res = await uploadRaw(
+        "filename*=utf-8''..%2F..%2Fx.html%00%01%1B%5B2J%7F%E2%80%AEgnp.exe", await makePng());
+    assert.equal(res.status, 200);
+    const { file } = await res.json();
+    assert.equal(file.name, 'x.html[2Jgnp.exe');
+    assert.match(file.id, /^[0-9a-f]{32}\.png$/);
+    assert.equal(file.mimeType, 'image/png');
+    // Stored inside the uploads directory under the server's name, nowhere else.
+    assert.ok((await uploadedFiles()).includes(file.id));
+    await assert.rejects(fs.access(path.join(visitors, 'x.html')));
+    await assert.rejects(fs.access(path.join(tmp, 'x.html')));
+
+    // Raw control characters make the body malformed: a 400, not a stack trace.
+    const raw = await uploadRaw('filename="bad\u0001name.png"', await makePng());
+    assert.equal(raw.status, 400);
+    assert.deepEqual(await raw.json(), { error: 'Invalid upload' });
+});
+
+test('visitor files are served with locked-down headers', async () => {
+    const { file } = await (await upload(await makePng(), 'a.png')).json();
+    const res = await fetch(base + file.path);
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.headers.get('content-security-policy'), "default-src 'none'; sandbox");
+    assert.equal(res.headers.get('cross-origin-resource-policy'), 'same-origin');
+    assert.equal(res.headers.get('content-type'), 'image/png');
+
+    // A file from before these rules, with an extension the server would never pick,
+    // is only a download.
+    const legacyPath = path.join(visitors, 'uploads', '1700000000-1-page.html');
+    await fs.writeFile(legacyPath, '<script>1</script>');
+    const legacy = await fetch(`${base}/uploads/users/1700000000-1-page.html`);
+    assert.equal(legacy.status, 200);
+    assert.equal(legacy.headers.get('content-type'), 'application/octet-stream');
+    assert.equal(legacy.headers.get('content-disposition'), 'attachment');
+    assert.equal(legacy.headers.get('content-security-policy'), "default-src 'none'; sandbox");
+    await fs.unlink(legacyPath);
+
+    // The rest of the site gets nosniff too.
+    const api = await fetch(`${base}/api/data/reviews`);
+    assert.equal(api.headers.get('x-content-type-options'), 'nosniff');
+});
+
+test('a file over 10 MB is refused with 413', async () => {
+    const before = await uploadedFiles();
+    const res = await upload(Buffer.alloc(11 * 1024 * 1024), 'big.png');
+    assert.equal(res.status, 413);
+    const body = await res.json();
+    assert.match(body.error, /too large/i);
+    assert.equal(body.limit, 10 * 1024 * 1024);
+    assert.deepEqual(await uploadedFiles(), before);
+});
+
+test('uploads are limited to 10 per 15 minutes per address', async () => {
+    const ip = freshIp();
+    const statuses = [];
+    for (let i = 0; i < 11; i++) {
+        statuses.push((await upload('not media', 'x.txt', { ip })).status);
+    }
+    assert.deepEqual(statuses, [...Array(10).fill(415), 429]);
+    // Someone else is not affected.
+    assert.equal((await upload('not media', 'x.txt')).status, 415);
+});
+
+test('chat posts are limited to 20 per minute per address', async () => {
+    const ip = freshIp();
+    const statuses = [];
+    for (let i = 0; i < 21; i++) {
+        const res = await postJson('/api/chat/tech/messages', { user: 'u', text: `r${i}` }, ip);
+        statuses.push(res.status);
+    }
+    assert.deepEqual(statuses, [...Array(20).fill(200), 429]);
+    const limited = await postJson('/api/chat/tech/messages', { user: 'u', text: 'x' }, ip);
+    assert.match((await limited.json()).error, /Too many requests/);
+});
+
+test('deleting, moving and creating folders share 30 per 15 minutes', async () => {
+    const ip = freshIp();
+    const headers = { 'Content-Type': 'application/json', ...forwardedFor(ip) };
+    const fileUrl = `${base}/api/computer/file/nope`;
+    const statuses = [];
+    for (let i = 0; i < 10; i++) {
+        statuses.push((await fetch(fileUrl, { method: 'DELETE', headers })).status);
+        statuses.push((await fetch(fileUrl, {
+            method: 'PUT', headers, body: JSON.stringify({ folder: 'x' })
+        })).status);
+        statuses.push((await postJson('/api/computer/folder', {}, ip)).status);
+    }
+    assert.deepEqual(statuses, Array(10).fill([404, 404, 400]).flat());
+    const res = await fetch(`${base}/api/computer/folder/nope`, { method: 'DELETE', headers });
+    assert.equal(res.status, 429);
+});
+
+test('chat text and user name are capped', async () => {
+    const post = (user, text) => postJson('/api/chat/gaming/messages', { user, text }, freshIp());
+    assert.equal((await post('u', 't'.repeat(501))).status, 400);
+    assert.equal((await post('u'.repeat(31), 'hi')).status, 400);
+    assert.equal((await post('u'.repeat(30), 't'.repeat(500))).status, 200);
+});
+
+function openSocket() {
+    return new Promise((resolve, reject) => {
+        const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
+        ws.once('message', () => resolve(ws));
+        ws.once('error', reject);
+    });
+}
+
+test('a WebSocket connection is limited in pace and message size', async () => {
+    const ws = await openSocket();
+    const received = [];
+    ws.on('message', (raw) => received.push(JSON.parse(raw)));
+
+    for (let i = 0; i < 21; i++) {
+        ws.send(JSON.stringify({ type: 'message', user: 'w', text: `b${i}` }));
+    }
+    await new Promise((resolve) => {
+        const check = setInterval(() => {
+            if (received.length >= 21) { clearInterval(check); resolve(); }
+        }, 10);
+    });
+    const mine = received.filter((m) => m.type === 'message' && m.data.user === 'w');
+    assert.equal(mine.length, 20);
+    assert.deepEqual(received.filter((m) => m.type === 'error').map((m) => m.error),
+        ['Too many messages, slow down.']);
+
+    // Over the size limit, ws closes the connection with 1009 (message too big).
+    const other = await openSocket();
+    const closed = new Promise((resolve) => other.once('close', resolve));
+    other.send(JSON.stringify({ type: 'message', user: 'w', text: 'x'.repeat(5000) }));
+    assert.equal(await closed, 1009);
+
+    // Too long for the chat, but small enough for the socket: refused, not saved.
+    const third = await openSocket();
+    const reply = new Promise((resolve) => {
+        third.once('message', (raw) => resolve(JSON.parse(raw)));
+    });
+    third.send(JSON.stringify({ type: 'message', user: 'w', text: 'y'.repeat(501) }));
+    assert.deepEqual(await reply, { type: 'error', error: 'Message is limited to 500 characters' });
+    ws.close();
+    third.close();
+});
+
+test('the quota is checked before accepting, including uploads racing each other', async () => {
+    // A server of its own, whose index already holds nearly all of a small quota.
+    const quotaVisitors = path.join(tmp, 'quota-visitors');
+    await fs.mkdir(path.join(quotaVisitors, 'data'), { recursive: true });
+    const png = await makePng({ noise: true, size: 64 });
+    const storedSize = (await sharp(png).png().toBuffer()).length;
+    const quota = 1024 * 1024;
+    // Room for one of the two uploads below, not both.
+    const used = quota - Math.floor(storedSize * 1.5);
+    await fs.writeFile(path.join(quotaVisitors, 'data', 'computer_files.json'), JSON.stringify({
+        files: [{ id: 'old.png', name: 'old.png', path: '/uploads/users/old.png', size: used,
+            folder: 'Desktop' }],
+        folders: []
+    }));
+
+    const quotaServer = startServer({
+        CONTENT_DIR: content, VISITORS_DIR: quotaVisitors, USER_UPLOADS_QUOTA_MB: '1'
+    });
+    try {
+        const url = `http://localhost:${await quotaServer.ready}`;
+        const replies = await Promise.all([
+            upload(png, 'a.png', { url }),
+            upload(png, 'b.png', { url })
+        ]);
+        const statuses = replies.map((r) => r.status).sort();
+        assert.deepEqual(statuses, [200, 413]);
+
+        const refused = await replies.find((r) => r.status === 413).json();
+        assert.deepEqual(Object.keys(refused).sort(), ['current', 'error', 'quota']);
+        assert.equal(refused.quota, quota);
+        assert.equal(refused.error, 'Storage quota exceeded. Please delete some files first.');
+
+        // Full now: refused from the announced size, before the body is even read.
+        const full = await upload(png, 'c.png', { url });
+        assert.equal(full.status, 413);
+
+        const index = JSON.parse(await fs.readFile(
+            path.join(quotaVisitors, 'data', 'computer_files.json'), 'utf8'));
+        const total = index.files.reduce((sum, f) => sum + f.size, 0);
+        assert.ok(total <= quota);
+        assert.equal((await fs.readdir(path.join(quotaVisitors, 'uploads'))).length, 1);
+    } finally {
+        quotaServer.child.kill();
+    }
+});
+
+test('only accepted files are on disk, each one in the index', async () => {
+    const onDisk = (await uploadedFiles()).filter((f) => f !== 'existing.jpg').sort();
+    const indexed = (await getJson('/api/computer/files')).files
+        .filter((f) => f.type !== 'folder').map((f) => f.id).sort();
+    assert.deepEqual(onDisk, indexed);
+    assert.ok(onDisk.every((f) => /^[0-9a-f]{32}\.(png|mp3|webm)$/.test(f)));
 });

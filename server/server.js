@@ -6,7 +6,12 @@ const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { createVisitorStore, DEFAULT_COMPUTER_FILES } = require('./visitorStore');
+const { createVisitorStore, writeFileAtomic, DEFAULT_COMPUTER_FILES } = require('./visitorStore');
+const { inspectUpload, displayName, storedName, UploadRejected, SERVED_TYPES } =
+    require('./uploadPolicy');
+const {
+    parseTrustProxy, createRateLimiters, chatMessageError, createMessageBudget, MAX_WS_PAYLOAD
+} = require('./abuseLimits');
 
 const app = express();
 // Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
@@ -45,12 +50,66 @@ if (!outsideCode && !path.isAbsolute(relativeToCode)) {
 
 const store = createVisitorStore(VISITORS_DIR);
 
+// req.ip, which the rate limits count by, is only the visitor's address if Express
+// knows how many proxies stand in front of it (see abuseLimits.js).
+const TRUST_PROXY = parseTrustProxy(process.env.TRUST_PROXY);
+app.set('trust proxy', TRUST_PROXY);
+const limits = createRateLimiters();
+
+// Nobody can see from here how many proxies the host puts in front, so log what the
+// first request looked like once per start: the address it came from (a proxy's, if
+// there is one) and how many X-Forwarded-For entries it carried. TRUST_PROXY should
+// equal that count.
+let proxyChecked = false;
+app.use((req, res, next) => {
+    if (!proxyChecked) {
+        proxyChecked = true;
+        const forwarded = String(req.headers['x-forwarded-for'] || '').split(',').filter(Boolean);
+        console.log(`Proxy check: first request from ${req.socket.remoteAddress} with ` +
+            `${forwarded.length} X-Forwarded-For entries; TRUST_PROXY=${TRUST_PROXY}`);
+    }
+    next();
+});
+
+// Never let a browser guess a type other than the one sent: a guess is how a file
+// that is not a page ends up run as one.
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    next();
+});
+
 app.use(cors());
 app.use(bodyParser.json());
+
+// Visitor files come from anyone and are served from this domain. Whatever one of
+// them turns out to be, it gets no script, no plugin, no same-origin access (sandbox
+// gives it an opaque origin), and other sites cannot embed it.
+const VISITOR_FILE_CSP = "default-src 'none'; sandbox";
+app.use('/uploads/users', (req, res, next) => {
+    res.setHeader('Content-Security-Policy', VISITOR_FILE_CSP);
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    next();
+});
+
+// The Content-Type comes from the extension, which the server chose from the
+// detected type (uploadPolicy.js), never from what the file looks like. Files from
+// before that rule have other extensions and are only offered as downloads.
+function visitorFileHeaders(res, filePath) {
+    const type = SERVED_TYPES[path.extname(filePath).slice(1).toLowerCase()];
+    res.setHeader('Content-Type', type || 'application/octet-stream');
+    if (!type) res.setHeader('Content-Disposition', 'attachment');
+}
+
 // Visitor files and editorial media share the /uploads URL space but live in
 // different repositories. The more specific mount must come first, and a visitor
 // path that matches nothing stops here instead of falling through to the content.
-app.use('/uploads/users', express.static(store.uploadsDir));
+// express.static skips dotfiles, so the temporary file of an upload being written
+// is never served.
+app.use('/uploads/users', express.static(store.uploadsDir, {
+    index: false,
+    redirect: false,
+    setHeaders: visitorFileHeaders
+}));
 app.use('/uploads/users', (req, res) => res.sendStatus(404));
 // Editorial media keep their name when replaced in the CMS, and a publish reaches the
 // disk in seconds, so browsers must revalidate (a cheap 304 via the ETag) rather than
@@ -127,41 +186,51 @@ app.get('/api/data/:type', async (req, res) => {
 // ============================================
 
 const USER_UPLOADS_DIR = store.uploadsDir;
-const MAX_QUOTA_BYTES = (process.env.USER_UPLOADS_QUOTA_MB || 1000) * 1024 * 1024;
+const MAX_QUOTA_BYTES = (process.env.USER_UPLOADS_QUOTA_MB || 100) * 1024 * 1024;
 const MAX_FILE_BYTES = (process.env.MAX_FILE_SIZE_MB || 10) * 1024 * 1024;
+// Room for the multipart envelope around the file: boundaries, part headers and the
+// folder field.
+const MULTIPART_OVERHEAD = 64 * 1024;
 
 // A route handler's mutate callback returns this to answer with an error; the store
 // then writes nothing because the data did not change.
 const reject = (status, body) => ({ rejected: { status, body } });
 
-// Calculate total directory size
-function getDirectorySize(dirPath) {
-    let totalSize = 0;
-    try {
-        const files = fsSync.readdirSync(dirPath);
-        for (const file of files) {
-            const filePath = path.join(dirPath, file);
-            const stats = fsSync.statSync(filePath);
-            if (stats.isFile()) {
-                totalSize += stats.size;
-            }
-        }
-    } catch (err) {
-        console.error('Error calculating directory size:', err);
-    }
-    return totalSize;
+/**
+ * Bytes used by visitor files, from the index rather than the disk: the index is what
+ * the upload route updates under its lock, so a check against it cannot race.
+ */
+function usedBytes(data) {
+    return data.files
+        .filter((f) => f.type !== 'folder')
+        .reduce((total, f) => total + (Number(f.size) || 0), 0);
 }
 
+const quotaExceeded = (current) => reject(413, {
+    error: 'Storage quota exceeded. Please delete some files first.',
+    quota: MAX_QUOTA_BYTES,
+    current
+});
+const fileTooLarge = () => reject(413, {
+    error: `File too large. The limit is ${MAX_FILE_BYTES / 1024 / 1024} MB per file.`,
+    limit: MAX_FILE_BYTES
+});
+const sendRejected = (res, { rejected }) => res.status(rejected.status).json(rejected.body);
+
 // GET /api/computer/quota - Get storage quota info
-app.get('/api/computer/quota', (req, res) => {
-    const currentSize = getDirectorySize(USER_UPLOADS_DIR);
-    res.json({
-        used: currentSize,
-        total: MAX_QUOTA_BYTES,
-        usedMB: (currentSize / 1024 / 1024).toFixed(2),
-        totalMB: (MAX_QUOTA_BYTES / 1024 / 1024).toFixed(2),
-        percentage: ((currentSize / MAX_QUOTA_BYTES) * 100).toFixed(2)
-    });
+app.get('/api/computer/quota', async (req, res) => {
+    try {
+        const currentSize = usedBytes(await store.readComputerFiles());
+        res.json({
+            used: currentSize,
+            total: MAX_QUOTA_BYTES,
+            usedMB: (currentSize / 1024 / 1024).toFixed(2),
+            totalMB: (MAX_QUOTA_BYTES / 1024 / 1024).toFixed(2),
+            percentage: ((currentSize / MAX_QUOTA_BYTES) * 100).toFixed(2)
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to read quota' });
+    }
 });
 
 // GET /api/computer/files - Get all files
@@ -174,7 +243,7 @@ app.get('/api/computer/files', async (req, res) => {
 });
 
 // POST /api/computer/folder - Create virtual folder
-app.post('/api/computer/folder', async (req, res) => {
+app.post('/api/computer/folder', limits.desktop, async (req, res) => {
     try {
         const { name, parentId } = req.body;
         if (!name) {
@@ -210,71 +279,101 @@ app.post('/api/computer/folder', async (req, res) => {
     }
 });
 
-// Configure multer for user uploads
+// Uploads are received in memory and only reach the public uploads directory once
+// every check has passed, so a refused file never touches the disk. The size limit
+// bounds the memory one upload can take.
 const userUpload = multer({
-    storage: multer.diskStorage({
-        destination: USER_UPLOADS_DIR,
-        filename: (req, file, cb) => {
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            const sanitized = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-            cb(null, uniqueSuffix + '-' + sanitized);
-        }
-    }),
-    limits: { fileSize: MAX_FILE_BYTES }
+    storage: multer.memoryStorage(),
+    // Browsers send the file name as raw UTF-8.
+    defParamCharset: 'utf8',
+    limits: { fileSize: MAX_FILE_BYTES, files: 1, fields: 4, fieldSize: 1024, parts: 5 }
 });
+
+/**
+ * Refuse before reading the body what the Content-Length already rules out: a file
+ * over the per-file limit, or one that cannot fit in what is left of the quota. The
+ * final quota check happens again under the index lock, with the real size.
+ */
+async function checkAnnouncedSize(req, res, next) {
+    try {
+        const announced = Number(req.headers['content-length']) || 0;
+        if (announced > MAX_FILE_BYTES + MULTIPART_OVERHEAD) {
+            return sendRejected(res, fileTooLarge());
+        }
+        const current = usedBytes(await store.readComputerFiles());
+        if (current + announced > MAX_QUOTA_BYTES) return sendRejected(res, quotaExceeded(current));
+        next();
+    } catch (err) {
+        next(err);
+    }
+}
+
+function receiveUpload(req, res, next) {
+    userUpload.single('file')(req, res, (err) => {
+        if (!err) return next();
+        if (err.code === 'LIMIT_FILE_SIZE') return sendRejected(res, fileTooLarge());
+        // Anything else is a request the parser could not make sense of (a limit, a
+        // malformed body): the client's fault, and not worth a stack trace in reply.
+        res.status(400).json({ error: 'Invalid upload' });
+    });
+}
 
 // POST /api/computer/upload - Upload file
-app.post('/api/computer/upload', userUpload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
+app.post('/api/computer/upload', limits.upload, checkAnnouncedSize, receiveUpload,
+    async (req, res) => {
+        let written = null;
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: 'No file uploaded' });
+            }
 
-        // Check quota after upload
-        const currentSize = getDirectorySize(USER_UPLOADS_DIR);
+            const media = await inspectUpload(req.file.buffer);
+            // A re-encoded image can come out larger than it went in.
+            if (media.data.length > MAX_FILE_BYTES) return sendRejected(res, fileTooLarge());
 
-        if (currentSize > MAX_QUOTA_BYTES) {
-            // Delete the just-uploaded file
-            await fs.unlink(req.file.path);
-            return res.status(413).json({
-                error: 'Storage quota exceeded. Please delete some files first.',
-                quota: MAX_QUOTA_BYTES,
-                current: currentSize
+            const filename = storedName(media.ext);
+            const target = path.join(USER_UPLOADS_DIR, filename);
+
+            // Quota check, file write and index entry in one serialized update: two
+            // uploads arriving together cannot both fit in the space left for one.
+            const result = await store.updateComputerFiles(async (data) => {
+                const current = usedBytes(data);
+                if (current + media.data.length > MAX_QUOTA_BYTES) return quotaExceeded(current);
+
+                written = target;
+                await writeFileAtomic(target, media.data);
+
+                const fileEntry = {
+                    id: filename,
+                    name: displayName(req.file.originalname),
+                    path: `/uploads/users/${filename}`,
+                    size: media.data.length,
+                    mimeType: media.mime,
+                    folder: req.body.folder || 'My Documents',
+                    created: new Date().toISOString()
+                };
+                data.files.push(fileEntry);
+                return { file: fileEntry };
             });
+
+            if (result.rejected) return sendRejected(res, result);
+            res.json({
+                success: true,
+                file: result.file
+            });
+        } catch (error) {
+            // The file is on disk but the index could not be saved: nothing refers to it.
+            if (written) await fs.unlink(written).catch(() => {});
+            if (error instanceof UploadRejected) {
+                return res.status(error.status).json({ error: error.message });
+            }
+            console.error('Upload error:', error);
+            res.status(500).json({ error: 'Upload failed' });
         }
-
-        // Save metadata
-        const fileEntry = {
-            id: req.file.filename,
-            name: req.file.originalname,
-            path: `/uploads/users/${req.file.filename}`,
-            size: req.file.size,
-            mimeType: req.file.mimetype,
-            folder: req.body.folder || 'My Documents',
-            created: new Date().toISOString()
-        };
-
-        await store.updateComputerFiles((data) => {
-            data.files.push(fileEntry);
-        });
-
-        res.json({
-            success: true,
-            file: fileEntry
-        });
-    } catch (error) {
-        console.error('Upload error:', error);
-        if (req.file && req.file.path) {
-            try {
-                await fs.unlink(req.file.path);
-            } catch (e) { }
-        }
-        res.status(500).json({ error: 'Upload failed' });
-    }
-});
+    });
 
 // PUT /api/computer/file/:id - Update file metadata (move to folder)
-app.put('/api/computer/file/:id', async (req, res) => {
+app.put('/api/computer/file/:id', limits.desktop, async (req, res) => {
     try {
         const { id } = req.params;
         const { folder } = req.body;
@@ -303,7 +402,7 @@ app.put('/api/computer/file/:id', async (req, res) => {
 });
 
 // DELETE /api/computer/file/:id - Delete file
-app.delete('/api/computer/file/:id', async (req, res) => {
+app.delete('/api/computer/file/:id', limits.desktop, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -336,7 +435,7 @@ app.delete('/api/computer/file/:id', async (req, res) => {
 });
 
 // DELETE /api/computer/folder/:name - Recursive Delete Folder
-app.delete('/api/computer/folder/:name', async (req, res) => {
+app.delete('/api/computer/folder/:name', limits.desktop, async (req, res) => {
     try {
         const { name } = req.params;
 
@@ -421,12 +520,13 @@ app.get('/api/chat/:room/messages', async (req, res) => {
 });
 
 // POST /api/chat/:room/messages
-app.post('/api/chat/:room/messages', async (req, res) => {
+app.post('/api/chat/:room/messages', limits.chat, async (req, res) => {
     try {
         const { room } = req.params;
         const { user, text } = req.body;
 
-        if (!user || !text) return res.status(400).json({ error: 'User and text required' });
+        const invalid = chatMessageError(user, text);
+        if (invalid) return res.status(400).json({ error: invalid });
 
         res.json(await store.addChatMessage(room, user, text));
     } catch (err) {
@@ -477,7 +577,9 @@ const WebSocket = require('ws');
 
 function startWebSocket(server) {
     // Explicitly define path to match Nginx location
-    const wss = new WebSocket.Server({ server, path: '/ws' });
+    // A larger frame than a chat message closes the connection (ws's default would
+    // accept 100 MB).
+    const wss = new WebSocket.Server({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD });
 
     // Debug: Log all upgrade requests to see if they reach the server
     server.on('upgrade', (request, socket, head) => {
@@ -495,13 +597,21 @@ function startWebSocket(server) {
             console.error('Error sending history:', e);
         }
 
+        // The HTTP rate limits end at the upgrade, so each connection has its own.
+        // A refusal is a message the client ignores; closing would only make it
+        // reconnect.
+        const budget = createMessageBudget();
+        const refuse = (error) => ws.send(JSON.stringify({ type: 'error', error }));
+
         ws.on('message', async (message) => {
             try {
+                if (!budget.take()) return refuse('Too many messages, slow down.');
                 const parsed = JSON.parse(message);
 
                 if (parsed.type === 'message') {
                     const { user, text } = parsed;
-                    if (!user || !text) return;
+                    const invalid = chatMessageError(user, text);
+                    if (invalid) return refuse(invalid);
 
                     const newMessage = await store.addChatMessage('general', user, text);
 
