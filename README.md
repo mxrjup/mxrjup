@@ -57,11 +57,14 @@ Once the server is running, open your browser and navigate to `http://localhost:
 
 ## Configuration
 
-The backend reads `server/.env`:
+The backend reads `server/.env`. Locally you write it by hand; on the host the deploy
+writes it from the Actions variables of this repository (*Settings > Secrets and
+variables > Actions > Variables*), which have the same names - see *Deploying*.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `PORT` | no | `3000` | Managed hosting assigns this at runtime |
+| `NODE_ENV` | no | - | `production` on the host (the deploy's default): errors answer without a stack trace |
 | `CONTENT_DIR` | no | `../mxrjup-content` | Checkout of the content repository (must contain `data/`) |
 | `VISITORS_DIR` | no | `../mxrjup-visitors` | Where visitor uploads and data are written; outside this checkout. Also read by the nightly backup |
 | `USER_UPLOADS_QUOTA_MB` | no | `100` | Total quota for guest uploads on `/computer` |
@@ -197,7 +200,7 @@ start the server; nothing else is needed:
 
 ```bash
 git clone git@github.com-mxrjup-visitors:mxrjup/mxrjup-visitors.git /path/to/visitors
-# VISITORS_DIR=/path/to/visitors in server/.env, then start or restart the server
+# VISITORS_DIR=/path/to/visitors as an Actions variable, then deploy (it writes server/.env)
 ```
 
 The server recreates the empty `uploads/` directory git does not keep. Install the
@@ -239,7 +242,16 @@ from the Actions tab, on the branch or tag you pick) and, over SSH on the host:
 2. `git fetch origin --tags`, then `git checkout --detach <commit of the run>` -
    no `--force`, no `reset --hard`;
 3. `npm ci` (the root `postinstall` runs `npm ci` in `server/` and `computer-app/`),
-   `npm run build`, checks the tree is still clean, then touches `tmp/restart.txt`.
+   `npm run build`, checks the tree is still clean;
+4. writes `server/.env` from the repository's Actions variables, then touches
+   `tmp/restart.txt`.
+
+The server's configuration therefore lives on GitHub: change a variable, then deploy
+(a tag, or a manual run on the current tag) for it to reach the host. `CONTENT_DIR`
+and `VISITORS_DIR` must be set, as absolute paths, or the deploy stops before
+connecting; the others are written only when set. Nothing in `server/.env` is secret.
+Infomaniak's Node.js sites accept no SSH key, so the workflow logs in with the SSH
+user's password.
 
 ```bash
 git tag v1.2.0 && git push origin v1.2.0
@@ -276,63 +288,64 @@ at all; for its backup and restore, see the section on visitor data backups.
 
 ## Setting up a new server
 
-On Infomaniak (web hosting with a Node.js site), in this order:
+On Infomaniak (web hosting with a Node.js site), in this order. The commands run in
+the Manager's web console or over SSH with the user of step 2.
 
 1. **Create the Node.js site in Node 24.** Pick Node 24 when you create it - it is the
-   version the site is built for. Its start command is `node server/server.js`, run
-   from the code checkout (step 2); the site gives the port in `PORT`. Enable SSH on
-   the hosting and check that `node -v` in an SSH session also says 24: the deploy
-   runs `npm ci` and the build from that shell.
-2. **Clone the three repositories** over SSH, outside one another, for example in
-   the site's home:
-
-   ```bash
-   git clone https://github.com/mxrjup/mxrjup.git mxrjup                 # CODE_DIR
-   git clone https://github.com/mxrjup/mxrjup-content.git mxrjup-content # CONTENT_DIR
-   mkdir mxrjup-visitors                                                 # VISITORS_DIR
-   ```
-
-   The code and content repositories are public: HTTPS, no key on the host. Leave the
-   content checkout on `main`. For `VISITORS_DIR`, an empty directory is enough (the
-   server creates what it needs); to bring back existing visitor data or set up the
-   nightly backup, follow the visitor data backup section instead.
-3. **Write `server/.env`** in the code checkout (see *Configuration*), with absolute
-   paths - the defaults only fit a local setup:
+   version the site is built for. In its Node.js settings: execution folder `./`,
+   launch command `node server/server.js`, build command empty (the deploy builds);
+   the site gives the port in `PORT`. Check that `node -v` in the console also says
+   24: the deploy runs `npm ci` and the build from that shell.
+2. **Create an FTP + SSH user** for the site (Node.js sites get none by default). SSH
+   keys are not available on Node.js sites, so the deploys log in with its password.
+3. **Lay out the three repositories.** The code checkout *is* the site: clone it into
+   the site's folder (the one the execution folder `./` points at). Content and visitor
+   data go next to it, never inside: the server refuses a `VISITORS_DIR` inside the
+   code checkout, and anything added there makes `git status` dirty, which stops every
+   deploy.
 
    ```
-   CONTENT_DIR=/absolute/path/to/mxrjup-content
-   VISITORS_DIR=/absolute/path/to/mxrjup-visitors
-   USER_UPLOADS_QUOTA_MB=100
-   MAX_FILE_SIZE_MB=10
+   <home>/
+   ├── <site folder>/        CODE_DIR      git clone https://github.com/mxrjup/mxrjup.git .
+   ├── mxrjup-content/       CONTENT_DIR   git clone https://github.com/mxrjup/mxrjup-content.git
+   └── mxrjup-visitors/      VISITORS_DIR  see the visitor data backup section
    ```
 
-   It is git-ignored, so deploys never see it.
-4. **First start.** In the code checkout, on the latest tag:
+   The code and content repositories are public: HTTPS, no credentials on the host.
+   Leave the content checkout on `main`. For `VISITORS_DIR`, an empty directory is
+   enough to start (the server creates what it needs); to bring back existing visitor
+   data or set up the nightly backup, follow the visitor data backup section. Note the
+   absolute paths (`pwd` in each): they go into the variables and secrets below.
+4. **Tell GitHub about the host.** In `mxrjup/mxrjup`, add the Actions *variables*
+   (see *Configuration*; `NODE_ENV` defaults to `production`):
 
-   ```bash
-   git checkout --detach v1.2.0      # the latest tag
-   npm ci && npm run build
-   git status --porcelain            # must print nothing
-   mkdir -p tmp && touch tmp/restart.txt
-   ```
+   | Variable | Value |
+   | --- | --- |
+   | `CONTENT_DIR` | absolute path of `mxrjup-content` (required) |
+   | `VISITORS_DIR` | absolute path of `mxrjup-visitors` (required) |
+   | `USER_UPLOADS_QUOTA_MB` | `100` |
+   | `MAX_FILE_SIZE_MB` | `10` |
+   | `TRUST_PROXY` | only if the `Proxy check:` log line asks for it |
 
-   Start the site from the Infomaniak panel if it is not running, then check it:
-   `curl -I https://<site>/api/data/reviews` answers `200` with
-   `Cache-Control: no-cache`, and the site's logs show the `Content from` and
-   `Visitor data in` lines with the right paths. The server refuses to start if
-   `CONTENT_DIR/data` is missing or `VISITORS_DIR` is inside the code checkout.
-5. **Let GitHub in.** Create an SSH key pair for deploys, add the public key to
-   `~/.ssh/authorized_keys` on the host, then add the secrets:
+   and the *secrets*:
 
    | Secret | `mxrjup/mxrjup` | `mxrjup/mxrjup-content` |
    | --- | --- | --- |
-   | `INFOMANIAK_HOST` | yes | yes |
-   | `INFOMANIAK_USER` | yes | yes |
-   | `INFOMANIAK_SSH_KEY` (private key) | yes | yes |
+   | `INFOMANIAK_HOST` (SSH host shown in the Manager) | yes | yes |
+   | `INFOMANIAK_USER` (the user of step 2) | yes | yes |
+   | `INFOMANIAK_SSH_PASSWORD` (its password) | yes | yes |
    | `INFOMANIAK_SITE_PATH` (absolute path of `CODE_DIR`) | yes | - |
    | `INFOMANIAK_CONTENT_PATH` (absolute path of `CONTENT_DIR`) | - | yes |
 
-   Check both by running each workflow once by hand from its Actions tab.
+5. **First deploy.** Push a tag (or run *Deploy to Infomaniak* by hand on the latest
+   one): it checks out the tag, installs, builds and writes `server/.env`. If the site
+   was not started yet, or does not restart through `tmp/restart.txt`, start or
+   restart it from the Manager. Then check: `curl -I https://<site>/api/data/reviews`
+   answers `200` with `Cache-Control: no-cache`, and the site's logs show the
+   `Content from` and `Visitor data in` lines with the right paths. The server refuses
+   to start if `CONTENT_DIR/data` is missing or `VISITORS_DIR` is inside the code
+   checkout. Run *Publish content* by hand once in `mxrjup/mxrjup-content` to check
+   its side.
 
 ## Code scaffolding
 
