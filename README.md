@@ -58,8 +58,8 @@ Once the server is running, open your browser and navigate to `http://localhost:
 ## Configuration
 
 The backend reads `server/.env`. Locally you write it by hand; on the host the deploy
-writes it from the Actions variables of this repository (*Settings > Secrets and
-variables > Actions > Variables*), which have the same names - see *Deploying*.
+writes it from the Actions secrets or variables of this repository (*Settings > Secrets
+and variables > Actions*), which have the same names - see *Deploying*.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
@@ -200,7 +200,7 @@ start the server; nothing else is needed:
 
 ```bash
 git clone git@github.com-mxrjup-visitors:mxrjup/mxrjup-visitors.git /path/to/visitors
-# VISITORS_DIR=/path/to/visitors as an Actions variable, then deploy (it writes server/.env)
+# VISITORS_DIR=/path/to/visitors as an Actions secret, then deploy (it writes server/.env)
 ```
 
 The server recreates the empty `uploads/` directory git does not keep. Install the
@@ -243,13 +243,15 @@ from the Actions tab, on the branch or tag you pick) and, over SSH on the host:
    no `--force`, no `reset --hard`;
 3. `npm ci` (the root `postinstall` runs `npm ci` in `server/` and `computer-app/`),
    `npm run build`, checks the tree is still clean;
-4. writes `server/.env` from the repository's Actions variables, then touches
-   `tmp/restart.txt`.
+4. writes `server/.env` from the repository's Actions secrets and variables, then
+   touches `tmp/restart.txt`.
 
-The server's configuration therefore lives on GitHub: change a variable, then deploy
-(a tag, or a manual run on the current tag) for it to reach the host. `CONTENT_DIR`
-and `VISITORS_DIR` must be set, as absolute paths, or the deploy stops before
-connecting; the others are written only when set. Nothing in `server/.env` is secret.
+The server's configuration therefore lives on GitHub: change it there, then deploy (a
+tag, or a manual run on the current tag) for it to reach the host. Each value is taken
+from the secret of that name, else the variable. The paths are secrets, since this
+repository and its workflow logs are public, and the log shows only the names written.
+`CONTENT_DIR` and `VISITORS_DIR` must be set, as absolute paths, or the deploy stops
+before connecting; the others are written only when set.
 Infomaniak's Node.js sites accept no SSH key, so the workflow logs in with the SSH
 user's password.
 
@@ -292,50 +294,51 @@ On Infomaniak (web hosting with a Node.js site), in this order. The commands run
 the Manager's web console or over SSH with the user of step 2.
 
 1. **Create the Node.js site in Node 24.** Pick Node 24 when you create it - it is the
-   version the site is built for. In its Node.js settings: execution folder `./`,
+   version the site is built for. In its Node.js settings: execution folder `./mxrjup`,
    launch command `node server/server.js`, build command empty (the deploy builds);
    the site gives the port in `PORT`. Check that `node -v` in the console also says
    24: the deploy runs `npm ci` and the build from that shell.
 2. **Create an FTP + SSH user** for the site (Node.js sites get none by default). SSH
    keys are not available on Node.js sites, so the deploys log in with its password.
-3. **Lay out the three repositories.** The code checkout *is* the site: clone it into
-   the site's folder (the one the execution folder `./` points at). Content and visitor
-   data go next to it, never inside: the server refuses a `VISITORS_DIR` inside the
-   code checkout, and anything added there makes `git status` dirty, which stops every
-   deploy.
+3. **Lay out the three repositories** side by side in the site's folder, the code in
+   `mxrjup/` (the execution folder). Content and visitor data sit next to the code,
+   never inside it: the server refuses a `VISITORS_DIR` inside the code checkout, and
+   anything added there makes `git status` dirty, which stops every deploy. This is
+   also the layout the server's defaults expect.
 
    ```
-   <home>/
-   ├── <site folder>/        CODE_DIR      git clone https://github.com/mxrjup/mxrjup.git .
-   ├── mxrjup-content/       CONTENT_DIR   git clone https://github.com/mxrjup/mxrjup-content.git
-   └── mxrjup-visitors/      VISITORS_DIR  see the visitor data backup section
+   ~/sites/<domain>/
+   ├── mxrjup/            CODE_DIR      git clone https://github.com/mxrjup/mxrjup.git
+   ├── mxrjup-content/    CONTENT_DIR   git clone https://github.com/mxrjup/mxrjup-content.git
+   └── mxrjup-visitors/   VISITORS_DIR  see the visitor data backup section
    ```
 
    The code and content repositories are public: HTTPS, no credentials on the host.
    Leave the content checkout on `main`. For `VISITORS_DIR`, an empty directory is
    enough to start (the server creates what it needs); to bring back existing visitor
    data or set up the nightly backup, follow the visitor data backup section. Note the
-   absolute paths (`pwd` in each): they go into the variables and secrets below.
-4. **Tell GitHub about the host.** In `mxrjup/mxrjup`, add the Actions *variables*
-   (see *Configuration*; `NODE_ENV` defaults to `production`):
-
-   | Variable | Value |
-   | --- | --- |
-   | `CONTENT_DIR` | absolute path of `mxrjup-content` (required) |
-   | `VISITORS_DIR` | absolute path of `mxrjup-visitors` (required) |
-   | `USER_UPLOADS_QUOTA_MB` | `100` |
-   | `MAX_FILE_SIZE_MB` | `10` |
-   | `TRUST_PROXY` | only if the `Proxy check:` log line asks for it |
-
-   and the *secrets*:
+   absolute paths (`pwd` in each): they go into the secrets below.
+4. **Tell GitHub about the host.** Add the Actions *secrets*:
 
    | Secret | `mxrjup/mxrjup` | `mxrjup/mxrjup-content` |
    | --- | --- | --- |
+   | `CONTENT_DIR` (absolute path of `mxrjup-content`) | yes | - |
+   | `VISITORS_DIR` (absolute path of `mxrjup-visitors`) | yes | - |
    | `INFOMANIAK_HOST` (SSH host shown in the Manager) | yes | yes |
    | `INFOMANIAK_USER` (the user of step 2) | yes | yes |
    | `INFOMANIAK_SSH_PASSWORD` (its password) | yes | yes |
    | `INFOMANIAK_SITE_PATH` (absolute path of `CODE_DIR`) | yes | - |
    | `INFOMANIAK_CONTENT_PATH` (absolute path of `CONTENT_DIR`) | - | yes |
+
+   and, in `mxrjup/mxrjup`, the Actions *variables* (secrets work too; see
+   *Configuration*):
+
+   | Variable | Value |
+   | --- | --- |
+   | `USER_UPLOADS_QUOTA_MB` | `100` |
+   | `MAX_FILE_SIZE_MB` | `10` |
+   | `TRUST_PROXY` | only if the `Proxy check:` log line asks for it |
+   | `NODE_ENV` | leave unset: the deploy writes `production` |
 
 5. **First deploy.** Push a tag (or run *Deploy to Infomaniak* by hand on the latest
    one): it checks out the tag, installs, builds and writes `server/.env`. If the site
