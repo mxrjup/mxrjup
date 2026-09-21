@@ -8,13 +8,13 @@
 #
 # Nothing is committed unless every data/*.json in the commit parses, and nothing at
 # all when the visitors changed nothing since the last run. Every failure exits
-# non-zero with the reason on stdout, which cron redirects to the log.
+# non-zero with the reason on stdout.
 #
-# Crontab entry (nightly, 03:30 - adjust the paths):
-#   30 3 * * * /path/to/mxrjup/scripts/backup-visitors.sh >> /path/to/backup-visitors.log 2>&1
+# The server runs it every night at VISITORS_BACKUP_AT (server/backupSchedule.js),
+# passing its VISITORS_DIR and node and copying the output to its log - the host has
+# no crontab. By hand, from the code checkout: bash scripts/backup-visitors.sh
 #
-# If cron runs with a bare PATH and cannot find node or git, give their absolute paths:
-#   30 3 * * * NODE_BIN=/usr/bin/node GIT_BIN=/usr/bin/git /path/to/mxrjup/scripts/...
+# Where PATH lacks node or git, give their absolute paths in NODE_BIN and GIT_BIN.
 #
 # BACKUP_ATTEMPTS (default 3) and BACKUP_RETRY_DELAY (seconds, default 10) tune how
 # long an unparseable JSON file is waited on before giving up.

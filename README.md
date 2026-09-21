@@ -57,19 +57,21 @@ Once the server is running, open your browser and navigate to `http://localhost:
 
 ## Configuration
 
-The backend reads `server/.env`. Locally you write it by hand; on the host the deploy
-writes it from the Actions secrets or variables of this repository (*Settings > Secrets
-and variables > Actions*), which have the same names - see *Deploying*.
+The backend reads `server/.env`, written by hand - locally, and on the host once, in the
+Manager's web console (see *Setting up a new server*). It is git-ignored, so a deploy
+never touches it; after changing it on the host, restart the site.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `PORT` | no | `3000` | Managed hosting assigns this at runtime |
-| `NODE_ENV` | no | - | `production` on the host (the deploy's default): errors answer without a stack trace |
+| `NODE_ENV` | no | - | `production` on the host: errors answer without a stack trace |
 | `CONTENT_DIR` | no | `../mxrjup-content` | Checkout of the content repository (must contain `data/`) |
 | `VISITORS_DIR` | no | `../mxrjup-visitors` | Where visitor uploads and data are written; outside this checkout. Also read by the nightly backup |
 | `USER_UPLOADS_QUOTA_MB` | no | `100` | Total quota for guest uploads on `/computer` |
 | `MAX_FILE_SIZE_MB` | no | `10` | Per-file cap on guest uploads |
 | `TRUST_PROXY` | no | `1` | Reverse proxies in front of the server, for the visitor's IP; see *Visitor uploads* |
+| `CONTENT_WEBHOOK_SECRET` | on the host | - | Secret shared with the content repository's webhook; unset, `POST /api/hooks/content` answers 503. See *Deploying* |
+| `VISITORS_BACKUP_AT` | on the host | - | `HH:MM`, host time: the server runs the nightly visitor backup then. Unset, no backup |
 
 The server has no admin credentials: it only reads content. Editing happens in the
 CMS, which authenticates against GitHub.
@@ -157,11 +159,12 @@ web root): only this server's headers make the files safe.
 ## Visitor data backup and restore
 
 On the host, `VISITORS_DIR` is a clone of the private `mxrjup/mxrjup-visitors`
-repository, and `scripts/backup-visitors.sh` commits it every night:
-
-```
-30 3 * * * /path/to/mxrjup/scripts/backup-visitors.sh >> /path/to/backup-visitors.log 2>&1
-```
+repository, and `scripts/backup-visitors.sh` commits it every night. The host has no
+crontab, so the server starts it itself: with `VISITORS_BACKUP_AT=03:30` in
+`server/.env`, it runs the script every day at 03:30 (the host's time, probably UTC),
+with its own `VISITORS_DIR` and `node`, and copies every line of its output to the
+server log, prefixed `[backup]` (`server/backupSchedule.js`). A run can also be started
+by hand in the console.
 
 Each run:
 
@@ -181,10 +184,11 @@ Each run:
    hand, and that is sorted out by hand in the clone.
 
 Every failure exits non-zero with a line starting with `BACKUP FAILED:` in the log.
-`NODE_BIN` and `GIT_BIN` point cron at `node` and `git` if its `PATH` lacks them. The
-push goes over SSH with a deploy key restricted to that one repository, through a host
-alias (`git@github.com-mxrjup-visitors:mxrjup/mxrjup-visitors.git`) so it does not
-interfere with the host's other keys.
+`NODE_BIN` and `GIT_BIN` point the script at `node` and `git` when run where `PATH`
+lacks them. The push goes over HTTPS with a fine-grained GitHub token limited to that
+one repository (*Contents: read and write*), stored in the clone's remote URL on the
+host - Infomaniak's Node.js sites take no SSH key. The token expires: renew it and
+update the URL (`git -C <VISITORS_DIR> remote set-url origin ...`) before it does.
 
 An upload lands in `uploads/` in one atomic rename, so a backup never sees it
 half-written. One stored between the index update and the commit may be committed
@@ -195,16 +199,14 @@ so the repository grows with everything ever uploaded, not with the 100 MB quota
 that scale it is acceptable; if it ever is not, the history can be squashed to the
 current state (a force push, done by hand, on this repository only).
 
-**Restoring on a new host.** Clone the repository where `VISITORS_DIR` points, then
-start the server; nothing else is needed:
+**Restoring on a new host.** Clone the repository where `VISITORS_DIR` points, before
+the site first starts, then start it; nothing else is needed:
 
 ```bash
-git clone git@github.com-mxrjup-visitors:mxrjup/mxrjup-visitors.git /path/to/visitors
-# VISITORS_DIR=/path/to/visitors as an Actions secret, then deploy (it writes server/.env)
+git clone https://x-access-token:<token>@github.com/mxrjup/mxrjup-visitors.git mxrjup-visitors
 ```
 
-The server recreates the empty `uploads/` directory git does not keep. Install the
-deploy key and the crontab line above before the first night.
+The server recreates the empty `uploads/` directory git does not keep.
 
 `node --test scripts/test/*.test.js` (after `cd server && npm ci`) checks all of this
 against a local bare repository with the real server: no commit when nothing changed, an
@@ -232,123 +234,128 @@ setup. Nothing about it runs on the host.
 
 ## Deploying
 
-Code and content ship separately: a tag deploys the code, a push to the content
-repository publishes the content. Neither overwrites anything on the host in silence.
+Infomaniak's Node.js sites cannot be driven over SSH from GitHub Actions: they take no
+SSH key, and commands sent from outside do not come back. So nothing pushes to the host.
+Code is built by the host itself, and content is pulled by the server when GitHub
+calls it. Neither overwrites anything on the host in silence.
 
-**Code: push a tag.** `.github/workflows/deploy.yml` runs on a `v*` tag (or by hand
-from the Actions tab, on the branch or tag you pick) and, over SSH on the host:
+**Code: push a tag, then restart the site.** The site's build command is
+`bash scripts/host-build.sh`, which the Manager runs, in its build environment, before
+every start of the app:
 
 1. refuses to go on if `git status --porcelain` is not empty in the code checkout;
-2. `git fetch origin --tags`, then `git checkout --detach <commit of the run>` -
-   no `--force`, no `reset --hard`;
-3. `npm ci` (the root `postinstall` runs `npm ci` in `server/` and `computer-app/`),
-   `npm run build`, checks the tree is still clean;
-4. writes `server/.env` from the repository's Actions secrets and variables, then
-   touches `tmp/restart.txt`.
-
-The server's configuration therefore lives on GitHub: change it there, then deploy (a
-tag, or a manual run on the current tag) for it to reach the host. Each value is taken
-from the secret of that name, else the variable. The paths are secrets, since this
-repository and its workflow logs are public, and the log shows only the names written.
-`CONTENT_DIR` and `VISITORS_DIR` must be set, as absolute paths, or the deploy stops
-before connecting; the others are written only when set.
-Infomaniak's Node.js sites accept no SSH key, so the workflow logs in with the SSH
-user's password.
+2. fetches the tags and checks out the newest `v*` one, in version order (`v1.10.0`
+   after `v1.9.0`) - no `--force`, no `reset --hard`; a tag deleted on GitHub is
+   dropped too;
+3. `npm ci` (the root `postinstall` runs `npm ci` in `server/` and `computer-app/`) and
+   `npm run build`;
+4. checks the tree is still clean.
 
 ```bash
 git tag v1.2.0 && git push origin v1.2.0
+# then Restart in the Manager (the site's dashboard)
 ```
 
-To roll back, run the workflow by hand and pick the previous tag in *Use workflow from*.
-Merging to `main` deploys nothing.
+Merging to `main` deploys nothing, and neither does a tag until the next start. Every
+start runs the build, an automatic restart after a crash included: slower, but the host
+always runs the newest tag. To roll back, tag the old commit with a newer version and
+restart. If the build fails, the site does not start; the reason is in the Manager's
+execution console, after `BUILD FAILED:`.
 
-**Content: nothing to do.** Every push to `main` of `mxrjup/mxrjup-content` (a CMS
-save, a hand edit, the Spotify sync) runs its `.github/workflows/publish.yml`, which
-does `git pull --ff-only` in the host's `CONTENT_DIR`. There is no build and no
-restart: the server rereads `data/*.json` on every request and serves `uploads/` from
-disk, so the change is live as soon as the pull ends, a few seconds after the push.
-Browsers do not hold on to it either: `/api/data/*` and the editorial media under
-`/uploads/` are sent with `Cache-Control: no-cache` and an ETag, so they revalidate (a
-`304` when nothing changed) instead of showing a stale copy - an image replaced in the
-CMS keeps its name.
+**Content: nothing to do.** `mxrjup/mxrjup-content` has a webhook on every push to
+`main` (a CMS save, a hand edit, the Spotify sync - webhooks, unlike workflows, fire
+for pushes made with `GITHUB_TOKEN`) that calls `POST /api/hooks/content` on the site.
+The server (`server/contentWebhook.js`):
+
+1. checks GitHub's `X-Hub-Signature-256` against `CONTENT_WEBHOOK_SECRET`, and
+   answers `401` otherwise; `ping` gets a `200`, other events and branches a `202`
+   that does nothing;
+2. answers `202` at once, then, in `CONTENT_DIR`, refuses local changes or a branch
+   other than `main`, fetches, refuses a history that has diverged from `origin/main`,
+   and fast-forwards;
+3. runs one update at a time: pushes arriving during one cost a single extra update.
+
+The outcome goes to the server log (`Content update: <before> -> <after>`, or
+`Content update refused: <reason>`), and GitHub lists each delivery under the webhook's
+*Recent Deliveries*. There is no build and no restart: the server rereads
+`data/*.json` on every request and serves `uploads/` from disk, so the change is live
+as soon as the pull ends, a few seconds after the push. Browsers do not hold on to it
+either: `/api/data/*` and the editorial media under `/uploads/` are sent with
+`Cache-Control: no-cache` and an ETag, so they revalidate (a `304` when nothing
+changed) instead of showing a stale copy - an image replaced in the CMS keeps its name.
 The app shells (`index.html`) stay `no-store`; the hashed bundles keep the default.
 
 What happens in each case:
 
 | Situation | Result |
 | --- | --- |
-| Tag `v*` pushed | The code checkout moves to the tagged commit, is installed, built and restarted. Content and visitor data are untouched: they live outside the checkout. |
+| Tag `v*` pushed | Nothing until the site restarts; then the checkout moves to the newest tag, is installed and built, and the app starts. Content and visitor data are untouched: they live outside the checkout. |
 | Content pushed to `main` | `CONTENT_DIR` fast-forwards to it; live on the next request. The code is not rebuilt or restarted. |
-| Local change in the code checkout (edited or stray file) | The deploy fails with *"The server has local changes"* and the list of files, before touching anything: same commit, same build, no restart. Commit the change to the repository or discard it on the host, then run the deploy again. |
-| Local change in the content checkout | The publish fails with *"has local changes"*, before pulling. Same remedy. |
-| Content history diverged (a commit made on the host, or `main` rewritten) | The publish fails with *"has diverged from origin/main"*; nothing is merged and the site keeps serving what it had. Compare with `git log --oneline --graph HEAD origin/main` on the host, then fix it there by hand. |
-| The install or build leaves a file git sees | The deploy fails before the restart (the old process keeps running). Ignore or commit the file, tag again. |
-| The commit is not on the host after the fetch | The deploy fails before the checkout. |
+| Local change in the code checkout (edited or stray file) | The build fails with *"has local changes"* and the list of files, before touching anything, and the site does not start. Commit the change to the repository or discard it on the host, then restart. |
+| The install or build leaves a file git sees | The build fails after it, and the site does not start. Ignore or commit the file, tag again, restart. |
+| Local change in the content checkout | The update is refused (*"has local changes"*), before fetching; the site keeps serving what it had. Same remedy, then push again or redeliver the webhook from GitHub. |
+| Content history diverged (a commit made on the host, or `main` rewritten) | The update is refused (*"has diverged from origin/main"*); nothing is merged and the site keeps serving what it had. Fix the checkout by hand, then redeliver. |
+| Webhook with a wrong secret | `401`, nothing runs. |
 
-Deploys queue rather than overlap, and so do publishes. Visitor data is not deployed
-at all; for its backup and restore, see the section on visitor data backups.
+Visitor data is not deployed at all; for its backup and restore, see the section on
+visitor data backups.
 
 ## Setting up a new server
 
 On Infomaniak (web hosting with a Node.js site), in this order. The commands run in
-the Manager's web console or over SSH with the user of step 2.
+the Manager's web console.
 
 1. **Create the Node.js site in Node 24.** Pick Node 24 when you create it - it is the
-   version the site is built for. In its Node.js settings: execution folder `./mxrjup`,
-   launch command `node server/server.js`, build command empty (the deploy builds);
-   the site gives the port in `PORT`. Check that `node -v` in the console also says
-   24: the deploy runs `npm ci` and the build from that shell.
-2. **Create an FTP + SSH user** for the site (Node.js sites get none by default). SSH
-   keys are not available on Node.js sites, so the deploys log in with its password.
-3. **Lay out the three repositories** side by side in the site's folder, the code in
+   version the site is built for. In its Node.js settings (*Advanced settings >
+   Node.js*):
+
+   | Setting | Value |
+   | --- | --- |
+   | Execution folder | `./mxrjup` |
+   | Build command | `bash scripts/host-build.sh` |
+   | Launch command | `node server/server.js` |
+
+   The site gives the port in `PORT`.
+2. **Lay out the three repositories** side by side in the site's folder, the code in
    `mxrjup/` (the execution folder). Content and visitor data sit next to the code,
    never inside it: the server refuses a `VISITORS_DIR` inside the code checkout, and
-   anything added there makes `git status` dirty, which stops every deploy. This is
-   also the layout the server's defaults expect.
+   anything added there makes `git status` dirty, which stops every build. This is the
+   layout the server's defaults expect, so `CONTENT_DIR` and `VISITORS_DIR` need not be
+   set.
 
    ```
    ~/sites/<domain>/
-   ├── mxrjup/            CODE_DIR      git clone https://github.com/mxrjup/mxrjup.git
-   ├── mxrjup-content/    CONTENT_DIR   git clone https://github.com/mxrjup/mxrjup-content.git
-   └── mxrjup-visitors/   VISITORS_DIR  see the visitor data backup section
+   ├── mxrjup/            git clone https://github.com/mxrjup/mxrjup.git
+   ├── mxrjup-content/    git clone https://github.com/mxrjup/mxrjup-content.git
+   └── mxrjup-visitors/   git clone https://x-access-token:<token>@github.com/mxrjup/mxrjup-visitors.git
    ```
 
-   The code and content repositories are public: HTTPS, no credentials on the host.
-   Leave the content checkout on `main`. For `VISITORS_DIR`, an empty directory is
-   enough to start (the server creates what it needs); to bring back existing visitor
-   data or set up the nightly backup, follow the visitor data backup section. Note the
-   absolute paths (`pwd` in each): they go into the secrets below.
-4. **Tell GitHub about the host.** Add the Actions *secrets*:
+   The code and content repositories are public: HTTPS, no credentials. Leave the
+   content checkout on `main`. The visitor repository is private: the token is the
+   backup's (see the visitor data backup section). Clone it before the site first
+   starts, or the server fills the directory first.
+3. **Write `server/.env`** in `mxrjup/` (see *Configuration*). The webhook secret is any
+   long random string, `openssl rand -hex 32` makes one:
 
-   | Secret | `mxrjup/mxrjup` | `mxrjup/mxrjup-content` |
-   | --- | --- | --- |
-   | `CONTENT_DIR` (absolute path of `mxrjup-content`) | yes | - |
-   | `VISITORS_DIR` (absolute path of `mxrjup-visitors`) | yes | - |
-   | `INFOMANIAK_HOST` (SSH host shown in the Manager) | yes | yes |
-   | `INFOMANIAK_USER` (the user of step 2) | yes | yes |
-   | `INFOMANIAK_SSH_PASSWORD` (its password) | yes | yes |
-   | `INFOMANIAK_SITE_PATH` (absolute path of `CODE_DIR`) | yes | - |
-   | `INFOMANIAK_CONTENT_PATH` (absolute path of `CONTENT_DIR`) | - | yes |
+   ```
+   NODE_ENV=production
+   CONTENT_WEBHOOK_SECRET=<openssl rand -hex 32>
+   VISITORS_BACKUP_AT=03:30
+   ```
 
-   and, in `mxrjup/mxrjup`, the Actions *variables* (secrets work too; see
-   *Configuration*):
-
-   | Variable | Value |
-   | --- | --- |
-   | `USER_UPLOADS_QUOTA_MB` | `100` |
-   | `MAX_FILE_SIZE_MB` | `10` |
-   | `TRUST_PROXY` | only if the `Proxy check:` log line asks for it |
-   | `NODE_ENV` | leave unset: the deploy writes `production` |
-
-5. **First deploy.** Push a tag (or run *Deploy to Infomaniak* by hand on the latest
-   one): it checks out the tag, installs, builds and writes `server/.env`. If the site
-   was not started yet, or does not restart through `tmp/restart.txt`, start or
-   restart it from the Manager. Then check: `curl -I https://<site>/api/data/reviews`
-   answers `200` with `Cache-Control: no-cache`, and the site's logs show the
-   `Content from` and `Visitor data in` lines with the right paths. The server refuses
-   to start if `CONTENT_DIR/data` is missing or `VISITORS_DIR` is inside the code
-   checkout. Run *Publish content* by hand once in `mxrjup/mxrjup-content` to check
-   its side.
+4. **First start.** With at least one `v*` tag pushed, start the site from the Manager
+   and follow the build in its execution console. Then check:
+   `curl -I https://<site>/api/data/reviews` answers `200` with
+   `Cache-Control: no-cache`; the logs show `Content from`, `Visitor data in` and
+   `Visitor data backup every day at 03:30`, with the right paths; the `Proxy check:`
+   line gives the `TRUST_PROXY` to set if it is not 1; and `https://<site>/mxrjup-visitors/`
+   lists no files.
+5. **Add the content webhook.** In `mxrjup/mxrjup-content`, *Settings > Webhooks >
+   Add webhook*: payload URL `https://<site>/api/hooks/content`, content type
+   `application/json`, the secret of step 3, *Just the push event*. GitHub's ping must
+   show a green tick under *Recent Deliveries*.
+6. **Check the backup** once by hand: `bash mxrjup/scripts/backup-visitors.sh` ends
+   with `pushed to origin/main`.
 
 ## Code scaffolding
 
