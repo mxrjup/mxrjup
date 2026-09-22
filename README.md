@@ -1,4 +1,4 @@
-# mxrjup
+# mxrjup-site
 
 Personal site: an Angular front end, an Express server that also serves a React
 "Windows 95" app under `/computer`, and a Sveltia CMS back office at `/admin`.
@@ -16,17 +16,17 @@ The site is three repositories, one per owner, and this one holds only code:
 
 | Repository | Holds | Written by |
 | --- | --- | --- |
-| `mxrjup/mxrjup` (this one) | code | developers |
+| `mxrjup/mxrjup-site` (this one) | code | developers |
 | [`mxrjup/mxrjup-content`](https://github.com/mxrjup/mxrjup-content) | `data/*.json` and `uploads/` | Sveltia CMS, the Spotify sync |
 | `mxrjup/mxrjup-visitors` (private) | files, desktop index and chat of `/computer` | the server |
 
 Clone them side by side - that is where the server looks by default:
 
 ```bash
-git clone git@github.com:mxrjup/mxrjup.git
+git clone git@github.com:mxrjup/mxrjup-site.git
 git clone git@github.com:mxrjup/mxrjup-content.git
 git clone git@github.com:mxrjup/mxrjup-visitors.git   # or just: mkdir mxrjup-visitors
-cd mxrjup && npm install
+cd mxrjup-site && npm install
 npm run build:computer        # only if you want /computer served by the backend
 npm run start:backend         # http://localhost:3000
 ```
@@ -311,13 +311,13 @@ the Manager's web console.
 
    | Setting | Value |
    | --- | --- |
-   | Execution folder | `./mxrjup` |
+   | Execution folder | `./mxrjup-site` |
    | Build command | `bash scripts/host-build.sh` |
    | Launch command | `node server/server.js` |
 
    The site gives the port in `PORT`.
 2. **Lay out the three repositories** side by side in the site's folder, the code in
-   `mxrjup/` (the execution folder). Content and visitor data sit next to the code,
+   `mxrjup-site/` (the execution folder). Content and visitor data sit next to the code,
    never inside it: the server refuses a `VISITORS_DIR` inside the code checkout, and
    anything added there makes `git status` dirty, which stops every build. This is the
    layout the server's defaults expect, so `CONTENT_DIR` and `VISITORS_DIR` need not be
@@ -325,7 +325,7 @@ the Manager's web console.
 
    ```
    ~/sites/<domain>/
-   ├── mxrjup/            git clone https://github.com/mxrjup/mxrjup.git
+   ├── mxrjup-site/       git clone https://github.com/mxrjup/mxrjup-site.git
    ├── mxrjup-content/    git clone https://github.com/mxrjup/mxrjup-content.git
    └── mxrjup-visitors/   git clone https://x-access-token:<token>@github.com/mxrjup/mxrjup-visitors.git
    ```
@@ -334,7 +334,7 @@ the Manager's web console.
    content checkout on `main`. The visitor repository is private: the token is the
    backup's (see the visitor data backup section). Clone it before the site first
    starts, or the server fills the directory first.
-3. **Write `server/.env`** in `mxrjup/` (see *Configuration*). The webhook secret is any
+3. **Write `server/.env`** in `mxrjup-site/` (see *Configuration*). The webhook secret is any
    long random string, `openssl rand -hex 32` makes one:
 
    ```
@@ -354,5 +354,5 @@ the Manager's web console.
    Add webhook*: payload URL `https://<site>/api/hooks/content`, content type
    `application/json`, the secret of step 3, *Just the push event*. GitHub's ping must
    show a green tick under *Recent Deliveries*.
-6. **Check the backup** once by hand: `bash mxrjup/scripts/backup-visitors.sh` ends
+6. **Check the backup** once by hand: `bash mxrjup-site/scripts/backup-visitors.sh` ends
    with `pushed to origin/main`.
