@@ -1,5 +1,5 @@
 import UseContext from '../Context'
-import { useContext, useRef, useState, useEffect } from "react";
+import { useContext, useState, useEffect } from "react";
 import Draggable from 'react-draggable'
 import smile from '../assets/smiley-face.png'
 import dead from '../assets/dead-face.png'
@@ -17,8 +17,8 @@ function MineSweeper() {
   const [timerMine, setTimerMine] = useState(0)
   const [gameDisable, setGameDisable] = useState(false)
   const [clearTimer, setClearTimer] = useState(null)
-  const [ROWS, setROWS] = useState(10);
-  const [COLS, setCOLS] = useState(10);
+  const ROWS = 10;
+  const COLS = 10;
 
   const [MINES, setMINES] = useState(() => {
     const storedLevel = localStorage.getItem('level');
@@ -39,7 +39,6 @@ function MineSweeper() {
     setRightClickDefault,
     themeDragBar,
     MineSweeperExpand, setMineSweeperExpand,
-    lastTapTime, setLastTapTime,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,

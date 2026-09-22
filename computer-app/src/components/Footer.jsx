@@ -27,10 +27,8 @@ export default function Footer() {
     const projectRef = useRef(null)
     const [calValue, calOnChange] = useState(new Date());
     const [width, setWidth] = useState(0);
-    const [reRenderFooter, setRerenderFooter] = useState(0)
 
     const {
-        deleteTap,
         onlineUser,
         isTouchDevice,
         desktopIcon,
@@ -39,7 +37,6 @@ export default function Footer() {
         iconTextSize,
         iconScreenSize, setIconScreenSize,
         iconSize, setIconSize,
-        chatDown,
         remountRunPosition,
         startActive, setStartActive,
         time, setTime,
@@ -51,13 +48,9 @@ export default function Footer() {
         clippyIndex, setClippyIndex,
         randomClippyPopup, setRandomClippyPopup,
         clippyTouched, setClippyTouched,
-        clippyThanks,
-        clippySendemail,
         firstTimoutShowclippy,
         RandomTimeoutShowClippy,
         SecondRandomTimeoutShowClippy,
-        ClearTOclippySendemailfunction,
-        ClearTOclippyThanksYouFunction,
         ClearTOdonttouch,
         ObjectState,
         setShutdownWindow,
@@ -264,8 +257,6 @@ export default function Footer() {
 
     useEffect(() => { // display clippy when windows start
         clearTimeout(firstTimoutShowclippy.current)
-        clearTimeout(ClearTOclippySendemailfunction.current)
-        clearTimeout(ClearTOclippyThanksYouFunction.curremt)
         clearTimeout(ClearTOclippyUsernameFunction.current)
 
         setShowClippy(true)
@@ -283,8 +274,6 @@ export default function Footer() {
         clearTimeout(SecondRandomTimeoutShowClippy.current)
         const randomTime = Math.floor(Math.random() * (50000 - 30000 + 1)) + 30000;
 
-        clearTimeout(ClearTOclippySendemailfunction.current)
-        clearTimeout(ClearTOclippyThanksYouFunction.curremt)
 
         RandomTimeoutShowClippy.current = setTimeout(() => { // random clippy index from length
             const randomIndex = Math.floor(Math.random() * clippyPhrase.inspiration.length)
@@ -316,24 +305,18 @@ export default function Footer() {
     }
 
     function handleClipperTalk() {
-        if (clippyThanks) return clippySuggest[1];
         if (clippyTouched) return clippyPhrase.interruption[0].phrase;
-        if (clippySendemail) return clippySuggest[0]
-        if (clippyUsername) return chatDown ? clippySuggest[4] : onlineUser < 2 ? clippySuggest[5] : clippySuggest[3]
+        if (clippyUsername) return onlineUser < 2 ? clippySuggest[1] : clippySuggest[0]
 
         return clippyPhrase.inspiration[clippyIndex].phrase // return default from phrase
     }
 
     useEffect(() => { /// need useeffect to update state before it returns on handleClipperTalk()
-        if (clippySendemail) {
-            setClippyIndex(1);
-            return;
-        }
         if (clippyUsername) {
             setClippyIndex(2);
             return;
         }
-    }, [clippySendemail, clippyUsername]);
+    }, [clippyUsername]);
 
     const iconSizeSelection = [
         { label: '360x640', value: 1 },

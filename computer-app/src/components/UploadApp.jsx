@@ -11,7 +11,6 @@ function UploadApp() {
         UploadExpand, setUploadExpand,
         themeDragBar,
         handleSetFocusItemTrue,
-        maxZindexRef,
         setDesktopIcon,
         deleteTap,
         UserCreatedFolder // Import UserCreatedFolder

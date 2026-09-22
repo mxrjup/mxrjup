@@ -1,4 +1,4 @@
-import { Component, ElementRef, NgZone, OnDestroy, AfterViewInit, ViewChild } from '@angular/core';
+import { Component, NgZone, OnDestroy, AfterViewInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import * as THREE from 'three';
 import { AsciiEffect } from 'three/examples/jsm/effects/AsciiEffect.js';

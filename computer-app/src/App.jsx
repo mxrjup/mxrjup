@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useRef, } from 'react'
 import UserContext from './Context'
-import { Filter } from 'bad-words';
-import badword from './badword'
 import Footer from './components/Footer';
 import Dragdrop from './components/Dragdrop';
 import MyComputer from './components/MyComputer';
 import ProjectFolder from './components/ProjectFolder';
-import MailFolder from './components/MailFolder';
 import Shutdown from './components/Shutdown';
 import MineSweeper from './components/MineSweeper'
 import MsnFolder from './components/MsnFolder';
@@ -49,9 +46,7 @@ function App() {
   })
   const [websocketConnection, setWebsocketConnection] = useState(true)
   const [chatBotActive, setChatBotActive] = useState(false);
-  const [onlineUser, setOnlineUser] = useState(0)
-  const [sortedIcon, setSortedIcon] = useState([])
-  const [sortIconTrigger, setSortIconTrigger] = useState(0)
+  const onlineUser = 0 // nothing counts the visitors online yet
   const [deleteIcon, setDeleteIcon] = useState(0)
   const refBeingClicked = useRef(null)
   const maxZindexRef = useRef(2);
@@ -84,12 +79,7 @@ function App() {
     return savedIconSize ? Number(savedIconSize) : 0
   });
   const [iconSize, setIconSize] = useState(false)
-  const [allowNoti, setAllowNoti] = useState(false)
-  const socket = useRef(null);
-  const [clearNotiTimeOut, setClearNotiTimeOut] = useState(null)
-  const [newMessage, setNewMessage] = useState('');
   const [notiOn, setNotiOn] = useState(false);
-  const [chatDown, setChatDown] = useState(false)
   const [key, setKey] = useState(0)
   const [dragging, setDragging] = useState(false)
   const DesktopRef = useRef(null);
@@ -98,17 +88,13 @@ function App() {
   const DiskRef = useRef(null);
   const PictureRef = useRef(null)
   const UtilityRef = useRef(null)
-  const [draggedIcon, setDraggedIcon] = useState(null);
   const [dropTargetFolder, setDropTargetFolder] = useState(null);
   const [reMountRun, setReMountRun] = useState(0)
   const [ErrorPopup, setErrorPopup] = useState(false)
   const [themeDragBar, setThemeDragBar] = useState(() => localStorage.getItem('barcolor') || '#14045c')
   const [login, setLogin] = useState(true)
   const [windowsShutDownAnimation, setWindowsShutDownAnimation] = useState(false)
-  const [detectMouse, setDetectMouse] = useState(false)
   const endOfMessagesRef = useRef(null);
-  const [KeyChatSession, setKeyChatSession] = useState('')
-  const [sendDisable, setSendDisable] = useState(false)
   const [userNameValue, setUserNameValue] = useState(() => {
     return localStorage.getItem('username') || '';
   });
@@ -116,15 +102,11 @@ function App() {
   const [chatData, setChatData] = useState([])
   const [shutdownWindow, setShutdownWindow] = useState(false)
   const ClearTOdonttouch = useRef(null);
-  const ClearTOclippySendemailfunction = useRef(null);
-  const ClearTOclippyThanksYouFunction = useRef(null);
   const ClearTOclippyUsernameFunction = useRef(null);
   const firstTimoutShowclippy = useRef(null);
   const RandomTimeoutShowClippy = useRef(null);
   const SecondRandomTimeoutShowClippy = useRef(null);
   const [clippyUsername, setClippyUsername] = useState(false)
-  const [clippySendemail, setClippySendemail] = useState(false)
-  const [clippyThanks, setClippyThanks] = useState(false)
   const [clippyTouched, setClippyTouched] = useState(false)
   const [randomClippyPopup, setRandomClippyPopup] = useState(false)
   const [clippyIndex, setClippyIndex] = useState(0)
@@ -194,17 +176,11 @@ function App() {
   /* -------------------------------------------------------------------------- */
   const [lastTapTime, setLastTapTime] = useState(0)
   const [projectUrl, setProjectUrl] = useState('')
-  const [ResumeExpand, setResumeExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
   const [ProjectExpand, setProjectExpand] = useState(
     {
       expand: false, show: false, hide: false, focusItem: true,  // focusItem is window, item_1focus - 5 is the icon
       x: 0, y: 0, zIndex: 1,
     });
-
-  const [MailExpand, setMailExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
 
   const [openProjectExpand, setOpenProjectExpand] = useState(
     { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
@@ -303,14 +279,10 @@ function App() {
   }
 
   // Define all state setter functions and corresponding clear functions in an array
-  const allSetters = [setClippyThanks, setClippySendemail, setClippyUsername];
-  const allClears = [ClearTOclippyThanksYouFunction, ClearTOclippySendemailfunction, ClearTOclippyUsernameFunction];
+  const allSetters = [setClippyUsername];
+  const allClears = [ClearTOclippyUsernameFunction];
 
   useEffect(() => { // force user to update version by clearing their local storage!
-    // setTimeout(() => {
-    //   // handleShow('Patch');
-    // }, 2500);
-
     if (!desktopIcon.find(icon => icon.name === 'Paint')) {
       localStorage.clear();
       location.reload();
@@ -572,9 +544,6 @@ function App() {
   useEffect(() => { // touch support device === true
     iconFocusIcon('') // make icon focus goes false
 
-    const htmlElement = document.documentElement; //check if user is in frontend
-    htmlElement.addEventListener('mouseenter', handleMouseSeen);
-
     const onTouchStartSupported = 'ontouchstart' in document.documentElement;
     setIsTouchDevice(onTouchStartSupported);
 
@@ -590,7 +559,6 @@ function App() {
     document.addEventListener('keydown', handleKeyPress);
     return () => {
       document.removeEventListener('keydown', handleKeyPress);
-      htmlElement.removeEventListener('mouseenter', handleMouseSeen);
     };
 
   }, []);
@@ -625,7 +593,7 @@ function App() {
       setDropTargetFolder('');
     } else if (folder === 'MyComputer') {
       // My Computer shows whichever folder it is browsing; its root holds only drives.
-      const validFolders = ['DiskC', 'DiskD', 'Resume', 'Project', 'Picture', 'RecycleBin', 'Utility', ...UserCreatedFolder.map(item => item.name)];
+      const validFolders = ['DiskC', 'DiskD', 'Project', 'Picture', 'RecycleBin', 'Utility', ...UserCreatedFolder.map(item => item.name)];
       setDropTargetFolder(validFolders.includes(currentFolder) && currentFolder !== name ? currentFolder : '');
     } else {
       setDropTargetFolder(folder);
@@ -649,13 +617,6 @@ function App() {
       setCurrentFolder('DiskD')
       setSelectedFolder({ label: 'Hard Disk (D:)', img: imageMapping(name) })
       setUndo(prev => [...prev, 'DiskD'])
-      return;
-    }
-
-    if (name === 'Resume') {
-      setCurrentFolder('Resume')
-      setSelectedFolder({ label: 'Resume', img: imageMapping(name) })
-      setUndo(prev => [...prev, 'Resume'])
       return;
     }
 
@@ -718,24 +679,6 @@ function App() {
         return;
       }
 
-      if (name === 'Resume') {
-        setTimeout(() => {
-          setCurrentFolder('Resume')
-        }, 100);
-        setSelectedFolder({ label: 'Hard Disk (D:)', img: imageMapping(name) })
-        setUndo(prev => [...prev, 'Resume'])
-        return;
-      }
-
-      if (name === 'Resume') {
-        setTimeout(() => {
-          setCurrentFolder('Resume')
-        }, 100);
-        setSelectedFolder({ label: 'Resume', img: imageMapping(name) })
-        setUndo(prev => [...prev, 'Resume'])
-        return;
-      }
-
       if (name === 'Project') {
         setTimeout(() => {
           setCurrentFolder('Project')
@@ -792,16 +735,11 @@ function App() {
     localEffect, setLocalEffect,
     localBg, setLocalBg,
     connectWebSocket,
-    websocketConnection, setWebsocketConnection,
+    websocketConnection,
     chatBotActive, setChatBotActive,
     PatchExpand, setPatchExpand,
     onlineUser,
-    UtilityRef,
-    PaintExpand, setPaintExpand,
     UploadExpand, setUploadExpand,
-    sortedIcon, setSortedIcon,
-    sortIconTrigger, setSortIconTrigger,
-    maxZindexRef,
     deleteIcon, setDeleteIcon,
     handleMobileLongPressBin,
     deleteTap,
@@ -813,12 +751,10 @@ function App() {
     handleMobileLongPress,
     iconBeingRightClicked, setIconBeingRightClicked,
     rightClickIcon, setRightClickIcon,
-    BinRef,
-    BinExpand, setBinExpand,
     refresh, setRefresh,
     timerRef,
     rightClickDefault, setRightClickDefault,
-    rightClickPosition, setRightClickPosition,
+    rightClickPosition,
     loadedMessages, setLoadedMessages,
     currentPhoto, setCurrentPhoto,
     textError,
@@ -833,47 +769,35 @@ function App() {
     iconContainerSize, iconImgSize, iconTextSize,
     iconScreenSize, setIconScreenSize,
     iconSize, setIconSize,
-    clearNotiTimeOut, setClearNotiTimeOut,
-    newMessage, setNewMessage,
     notiOn, setNotiOn,
-    chatDown,
     handleDragStop,
     key, setKey,
-    dragging, setDragging,
+    dragging,
     handleOnDrag,
     DesktopRef,
     ProjectFolderRef,
     DiskRef,
     handleDrop,
     dropTargetFolder, setDropTargetFolder,
-    draggedIcon, setDraggedIcon,
     startActive, setStartActive,
     time, setTime,
     desktopIcon, setDesktopIcon,
     UserCreatedFolder, setUserCreatedFolder, // Expose UserCreatedFolder and its setter
-    tap, setTap,
+    tap,
     imageMapping,
     lastTapTime, setLastTapTime,
-    ResumeExpand, setResumeExpand,
     handleShow, handleShowMobile,
     StyleHide,
-    isTouchDevice, setIsTouchDevice,
+    isTouchDevice,
     ProjectExpand, setProjectExpand,
-    MailExpand, setMailExpand,
     handleDoubleClickiframe,
     showClippy, setShowClippy,
     clippyIndex, setClippyIndex,
     randomClippyPopup, setRandomClippyPopup,
     clippyTouched, setClippyTouched,
-    clippyThanks, setClippyThanks,
-    clippySendemail, setClippySendemail,
-    clippyThanksYouFunction,
-    clippySendemailfunction,
     RandomTimeoutShowClippy,
     firstTimoutShowclippy,
     SecondRandomTimeoutShowClippy,
-    ClearTOclippySendemailfunction,
-    ClearTOclippyThanksYouFunction,
     ClearTOdonttouch,
     ObjectState,
     handleSetFocusItemTrue,
@@ -884,23 +808,22 @@ function App() {
     shutdownWindow, setShutdownWindow,
     MineSweeperExpand, setMineSweeperExpand,
     MSNExpand, setMSNExpand,
-    chatData, setChatData,
+    chatData,
     chatValue, setChatValue,
     createChat,
     userNameValue, setUserNameValue,
     endOfMessagesRef,
-    clippyUsername, setClippyUsername,
+    clippyUsername,
     ClearTOclippyUsernameFunction,
-    sendDisable, setSendDisable,
     login, setLogin,
     openProjectExpand, setOpenProjectExpand,
     projectUrl, setProjectUrl,
     projectname,
-    windowsShutDownAnimation, setWindowsShutDownAnimation,
+    setWindowsShutDownAnimation,
     BgSettingExpand, setBgSettingExpand,
     themeDragBar, setThemeDragBar,
     RunExpand, setRunExpand,
-    reMountRun, setReMountRun,
+    reMountRun,
     ErrorPopup, setErrorPopup,
     remountRunPosition,
   }
@@ -1029,7 +952,6 @@ function App() {
         <Shutdown />
         <MyComputer />
         <ProjectFolder />
-        <MailFolder />
         <MineSweeper />
         <MsnFolder />
         <OpenProject />
@@ -1045,7 +967,6 @@ function App() {
 
   function deletepermanently(deleteName) { // delete from desktopIcon
 
-    // console.log(deleteName)
     deleteTap(deleteName)
     const droppedIcon = desktopIcon.find(icon => icon.name === deleteName);
 
@@ -1133,7 +1054,6 @@ function App() {
 
         const sorted = sortDesktopIcons(updatedIcons)
         localStorage.setItem('icons', JSON.stringify(sorted));
-        setSortedIcon(sorted) // saved sort icon to state to use when refresh
         return updatedIcons; // Return the updated state
       });
     }
@@ -1190,7 +1110,6 @@ function App() {
         const updatedIcons = prevIcons.filter(icon => icon.name !== droppedIcon.name);
         const newIcon = { ...droppedIcon, folderId: target };
         setDropTargetFolder('')
-        setDraggedIcon('');
         setKey(prev => prev + 1) //make folder icon by re-mount
         localStorage.setItem('icons', JSON.stringify([...updatedIcons, newIcon]));
         return [...updatedIcons, newIcon];
@@ -1205,9 +1124,6 @@ function App() {
   }
 
 
-  function handleMouseSeen() { //check if user is on the frontend
-    setDetectMouse(true)
-  }
 
 
   function ringMsnOff() {
@@ -1249,10 +1165,8 @@ function App() {
   function ObjectState() {
     return [
 
-      { name: 'Resume', setter: setResumeExpand, usestate: ResumeExpand, color: 'rgba(65, 138, 68, 0.85)', size: 'small' },
       { name: 'Project', setter: setProjectExpand, usestate: ProjectExpand, color: 'rgba(211, 117, 0, 0.85)', size: 'small' },
       { name: 'Picture', setter: setPictureExpand, usestate: pictureExpand, color: 'rgba(85, 50, 148, 0.85)', size: 'large' },
-      { name: 'Mail', setter: setMailExpand, usestate: MailExpand, color: 'rgba(178, 26, 77, 0.85)', size: 'small' },
       { name: 'IE', setter: setOpenProjectExpand, usestate: openProjectExpand, color: 'rgba(0, 159, 186, 0.85)', size: 'small' },
       { name: 'MineSweeper', setter: setMineSweeperExpand, usestate: MineSweeperExpand, color: 'rgba(187, 51, 48, 0.85)', size: 'small' },
       { name: 'MSN', setter: setMSNExpand, usestate: MSNExpand, color: 'rgba(52, 70, 143, 0.85)', size: 'small' },
@@ -1382,7 +1296,6 @@ function App() {
         }, 100);
 
         // Your existing special cases...
-        if (lowerCaseName === 'mail') clippySendemailfunction();
         if (lowerCaseName === 'msn') clippyUsernameFunction();
         if (lowerCaseName === 'ie') {
           handleDoubleClickiframe('IE', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
@@ -1480,7 +1393,6 @@ function App() {
             }
             maxZindexRef.current += 1;
           }, 100);
-          if (lowerCaseName === 'mail') clippySendemailfunction();
           if (lowerCaseName === 'upload') {
             // Upload specific logic if any, currently handled by generic setter
           }
@@ -1534,14 +1446,6 @@ function App() {
     }, 8000);
   }
 
-
-  function clippyThanksYouFunction() {
-    handleClippyFunction(setClippyThanks, ClearTOclippyThanksYouFunction, allSetters);
-  }
-
-  function clippySendemailfunction() {
-    handleClippyFunction(setClippySendemail, ClearTOclippySendemailfunction, allSetters);
-  }
 
   function clippyUsernameFunction() {
     handleClippyFunction(setClippyUsername, ClearTOclippyUsernameFunction, allSetters);

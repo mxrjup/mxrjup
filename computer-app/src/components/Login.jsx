@@ -5,8 +5,8 @@ import '../css/Login.css'
 
 function Login() {
 
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('1234')
+  const username = 'admin'
+  const password = '1234'
   const [sizeUp, setSizeUp] = useState(1)
 
   const { setLogin, themeDragBar } = useContext(UseContext);

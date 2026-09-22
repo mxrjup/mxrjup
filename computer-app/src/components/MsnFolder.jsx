@@ -20,7 +20,6 @@ function MsnFolder() {
     onlineUser,
     loadedMessages, setLoadedMessages,
     themeDragBar,
-    sendDisable,
     endOfMessagesRef,
     createChat,
     userNameValue, setUserNameValue,
@@ -47,7 +46,6 @@ function MsnFolder() {
   }, [userName, userNameValue]);
 
   const topOfMessagesRef = useRef(null); // Ref to track the top of the chat container
-  const [initialLoading, setInitialLoading] = useState(false)
 
 
   const lastMessage = chatData.length > 0
@@ -148,7 +146,6 @@ function MsnFolder() {
   function loadMoreMessages() {
     if (loadedMessages.length >= chatData.length) return; // All loaded
 
-    const currentLength = loadedMessages.length;
     // Calculate how many more we can load from the top
     // We want to slice from the "unloaded" portion at the beginning of chatData.
     // Index of the first loaded message in chatData?
@@ -418,11 +415,7 @@ function MsnFolder() {
                 }
               }}
             />
-            <button
-              style={{ color: sendDisable ? 'grey' : null }}
-              disabled={sendDisable}
-              onClick={handleSend}
-            >
+            <button onClick={handleSend}>
               Send
             </button>
           </div>

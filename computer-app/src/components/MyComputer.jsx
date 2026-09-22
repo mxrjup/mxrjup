@@ -14,12 +14,11 @@ function MyComputer() {
   const {
     setCurrentRightClickFolder,
     refBeingClicked,
-    inFolder, setInFolder,
+    setInFolder,
     handleShowInfolderMobile, handleShowInfolder,
     handleMobileLongPress,
     setRightClickIcon,
     setIconBeingRightClicked,
-    setRightClickDefault,
     timerRef,
     undo, setUndo,
     DiskRef,
@@ -38,8 +37,6 @@ function MyComputer() {
     MyComputerExpand, setMyComputerExpand,
     lastTapTime, setLastTapTime,
     isTouchDevice,
-    handleShowMobile,
-    handleShow,
     handleSetFocusItemTrue,
     inlineStyleExpand,
     inlineStyle,
@@ -60,18 +57,11 @@ function MyComputer() {
     { folder: 'DiskC', label: 'Hard Disk (C:)', img: imageMapping('Hard Disk (C:)') },
     { folder: 'DiskD', label: 'Hard Disk (D:)', img: imageMapping('Hard Disk (D:)') },
     { folder: 'CD-ROM', label: 'CD-ROM', img: imageMapping('CD-ROM') },
-    { folder: 'Resume', label: 'Resume', img: imageMapping('Resume') },
     { folder: 'Project', label: 'Project', img: imageMapping('Project') },
     { folder: 'Picture', label: 'Picture', img: imageMapping('Picture') },
     { folder: 'Utility', label: 'Utility', img: imageMapping('Utility') },
   ]
 
-  // const popUpiconList = desktopIcon.filter(a => {
-  //   if(a.type === 'Drive') {
-  //     return true
-  //   }
-  //   return false
-  // })
 
   const subFolders = desktopIcon.filter(a => { // get all the folder
     if (a.type === 'folder') {
