@@ -229,7 +229,7 @@ function Dragdrop() {
             bounds='.bound'
             onStart={() => { setDropTargetFolder('') }}
             onDrag={(e, data) => {
-              // Call original handleOnDrag for other potential logic (though we are overriding the main collision logic here)
+              // Open windows under the icon; the desktop folders below take precedence.
               handleOnDrag(icon.name, iconRefs.current[icon.name])();
 
               // Custom collision detection for Desktop Folders
@@ -257,10 +257,6 @@ function Dragdrop() {
                   }
                 }
               }
-              // If no desktop folder collision, we rely on App.jsx handleOnDrag for other windows (like RecycleBin, MyComputer) 
-              // via the handleOnDrag call above, assuming it sets state. 
-              // However, to prevent flickering if App.jsx clears it, we might need coordination.
-              // For now, let's assume if we found a desktop folder, we force it.
             }}
             onStop={(e, data) => {
               handleDragStop(data, icon.name, iconRefs.current[icon.name])

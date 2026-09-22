@@ -28,7 +28,6 @@ function OpenProject() {
     setProjectUrl,
     openProjectExpand, setOpenProjectExpand,
     lastTapTime, setLastTapTime,
-    StyleHide,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,
@@ -136,13 +135,11 @@ function OpenProject() {
               <div onClick={!isTouchDevice ? (e) => {
                 e.stopPropagation()
                 setOpenProjectExpand(prev => ({ ...prev, hide: true, focusItem: false }))
-                StyleHide('Internet')
               } : undefined
               }
                 onTouchEnd={(e) => {
                   e.stopPropagation()
                   setOpenProjectExpand(prev => ({ ...prev, hide: true, focusItem: false }))
-                  StyleHide('Internet')
                 }}
                 onTouchStart={(e) => e.stopPropagation()}
               >

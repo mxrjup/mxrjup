@@ -35,7 +35,6 @@ function EmptyFolder({ state, setState, refState, folderName, photoMode, paintMo
     desktopIcon, setDesktopIcon,
     themeDragBar,
     lastTapTime, setLastTapTime,
-    StyleHide,
     isTouchDevice,
     handleShowMobile,
     handleShow,
@@ -223,13 +222,11 @@ function EmptyFolder({ state, setState, refState, folderName, photoMode, paintMo
               e.stopPropagation();
               setState(prev => ({ ...prev, hide: true, focusItem: false }));
               userCreatedFolderMode && setState({ hide: true, focusItem: false });
-              StyleHide(folderName);
             } : undefined}
               onTouchEnd={(e) => {
                 e.stopPropagation()
                 setState(prev => ({ ...prev, hide: true, focusItem: false }))
                 userCreatedFolderMode && setState({ hide: true, focusItem: false });
-                StyleHide(folderName)
               }}
               onTouchStart={(e) => e.stopPropagation()}
             >

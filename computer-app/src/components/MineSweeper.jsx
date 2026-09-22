@@ -40,7 +40,6 @@ function MineSweeper() {
     themeDragBar,
     MineSweeperExpand, setMineSweeperExpand,
     lastTapTime, setLastTapTime,
-    StyleHide,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,
@@ -255,13 +254,11 @@ function MineSweeper() {
               <div onClick={ !isTouchDevice? (e) => {
                 e.stopPropagation()
                 setMineSweeperExpand(prev => ({...prev, hide: true, focusItem: false}))
-                StyleHide('MineSweeper') 
               } : undefined
             }
                 onTouchEnd={(e) => {
                 e.stopPropagation()
                 setMineSweeperExpand(prev => ({...prev, hide: true, focusItem: false}))
-                StyleHide('MineSweeper')
               }}
                 onTouchStart={(e) => e.stopPropagation()}
               >
