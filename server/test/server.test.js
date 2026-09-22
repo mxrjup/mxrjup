@@ -51,6 +51,7 @@ before(async () => {
     // Files older than the CMS are a bare array.
     await write('media.json', [{ id: 'm1', title: 'M' }]);
     await write('credits.json', { items: [] });
+    await write('wip.json', { items: [{ id: 'w1', date: '2026', object: 'Deck', subject: 'Griptape', link: 'https://example.com' }] });
     await write('timeline.json', { items: [
         { title: 'Spotify', date: '2025-01-01', cover: 'https://i.scdn.co/x', spotifyId: 'x' },
         { title: 'Hidden', date: '2024-06-01', spotifyId: 'h', hidden: true },
@@ -158,6 +159,7 @@ test('content is read from CONTENT_DIR, in both file shapes', async () => {
     assert.deepEqual(await getJson('/api/data/reviews'), [{ id: 'r1', artist: 'A' }]);
     assert.deepEqual(await getJson('/api/data/media'), [{ id: 'm1', title: 'M' }]);
     assert.deepEqual(await getJson('/api/data/credits'), []);
+    assert.deepEqual(await getJson('/api/data/wip'), [{ id: 'w1', date: '2026', object: 'Deck', subject: 'Griptape', link: 'https://example.com' }]);
     // No file at all reads as empty.
     assert.deepEqual(await getJson('/api/data/cool_stuff'), []);
     assert.equal((await fetch(`${base}/api/data/computer_files`)).status, 400);

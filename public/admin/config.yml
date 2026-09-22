@@ -187,3 +187,23 @@ collections:
               - { name: id, label: ID, widget: uuid }
               - { name: artName, label: Art name, widget: string, hint: 'Ex: Decor 1' }
               - { name: artistName, label: Artist name, widget: string }
+
+  - name: wip
+    label: WIP
+    files:
+      - name: wip
+        label: WIP
+        file: data/wip.json
+        description: The three-column grid on /wip. Each row links out.
+        fields:
+          - name: items
+            label: Experiments
+            label_singular: Experiment
+            widget: list
+            summary: '{{fields.date}} : {{fields.subject}}'
+            fields:
+              - { name: id, label: ID, widget: uuid }
+              - { name: date, label: Date, widget: string, hint: 'Free text, first column. Ex: 2026 or ONGOING' }
+              - { name: object, label: Object, widget: string, hint: 'Second column' }
+              - { name: subject, label: Subject, widget: string, hint: 'Third column' }
+              - { name: link, label: Link, widget: string, hint: 'The whole row links here' }

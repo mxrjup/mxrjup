@@ -18,13 +18,5 @@
         } @empty {
         <div class="empty-state">NO EXPERIMENTS YET.</div>
         }
-        <!-- Repeat data to ensure scrolling for the effect -->
-        @for (exp of experiments(); track exp.id + '_dup') {
-        <a [href]="exp.link" class="grid-row">
-            <div class="col-date">{{ exp.date }}</div>
-            <div class="col-object">{{ exp.object }}</div>
-            <div class="col-subject">{{ exp.subject }} copy</div>
-        </a>
-        }
     </div>
 </div>
