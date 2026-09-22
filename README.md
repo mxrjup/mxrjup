@@ -17,8 +17,9 @@ The site is three repositories, one per owner, and this one holds only code:
 | Repository | Holds | Written by |
 | --- | --- | --- |
 | `mxrjup/mxrjup-site` (this one) | code | developers |
-| [`mxrjup/mxrjup-content`](https://github.com/mxrjup/mxrjup-content) | `data/*.json` and `uploads/` | Sveltia CMS, the Spotify sync |
+| [`mxrjup/mxrjup-content`](https://github.com/mxrjup/mxrjup-content) | `data/*.json` and `uploads/` | Sveltia CMS, the Spotify sync, the weekly stats |
 | `mxrjup/mxrjup-visitors` (private) | files, desktop index and chat of `/computer` | the server |
+| `mxrjup/mxrjup-listening` (private) | the Spotify listening history behind `/music/stats` | its own workflows |
 
 Clone them side by side - that is where the server looks by default:
 
@@ -231,6 +232,20 @@ The sync, its Spotify credentials (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
 `server/.env`) and its tests live in
 [`mxrjup/mxrjup-content`](https://github.com/mxrjup/mxrjup-content); its README has the
 setup. Nothing about it runs on the host.
+
+## Music stats
+
+`/music/stats` (the *STATS* link beside *TIMELINE*) is `data/stats.json` of the content
+repository, served whole by `GET /api/data/stats` - an empty object until the first one
+is published, and the page then says *NO STATS YET*. The file is not in the CMS: the
+private `mxrjup/mxrjup-listening` repository logs the Spotify plays every 3 hours and
+rewrites it every Monday, and its README says how each number is counted. It holds the
+charts and weekly totals only, no single play and no time of day. Nothing about it runs
+on the host.
+
+The page shows what the file holds and nothing more: a chart with 3 entries shows 3 (up
+to 50, the first 10 until *See All*), an empty section is left out, and the range switch
+only offers the ranges the history fills.
 
 ## Deploying
 
