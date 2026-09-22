@@ -37,7 +37,6 @@ function MyComputer() {
     themeDragBar,
     MyComputerExpand, setMyComputerExpand,
     lastTapTime, setLastTapTime,
-    StyleHide,
     isTouchDevice,
     handleShowMobile,
     handleShow,
@@ -220,12 +219,10 @@ function MyComputer() {
             <div onClick={!isTouchDevice ? (e) => {
               e.stopPropagation();
               setMyComputerExpand(prev => ({ ...prev, hide: true, focusItem: false }));
-              StyleHide('MyComputer');
             } : undefined}
               onTouchEnd={(e) => {
                 e.stopPropagation()
                 setMyComputerExpand(prev => ({ ...prev, hide: true, focusItem: false }))
-                StyleHide('MyComputer')
               }}
               onTouchStart={(e) => e.stopPropagation()}
             >
@@ -372,7 +369,7 @@ function MyComputer() {
                       setDropTargetFolder('')
                       handleSetFocusItemTrue('MyComputer')
                     }}
-                    onDrag={handleOnDrag(icon.name, iconRefs.current[icon.name], icon.type)}
+                    onDrag={handleOnDrag(icon.name, iconRefs.current[icon.name])}
                     onStop={(e, data) => {
                       let target = dropTargetFolder;
                       if (!target && DiskRef.current) {

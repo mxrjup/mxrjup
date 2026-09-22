@@ -16,7 +16,6 @@ function MailFolder() {
     themeDragBar,
     MailExpand, setMailExpand,
     lastTapTime, setLastTapTime,
-    StyleHide,
     isTouchDevice,
     clippyThanksYouFunction,
     handleSetFocusItemTrue,
@@ -115,13 +114,11 @@ const form = useRef();
               <div onClick={ !isTouchDevice? (e) => {
                 e.stopPropagation()
                 setMailExpand(prev => ({...prev, hide: true, focusItem: false}))
-                StyleHide('Mail') 
               } : undefined
             }
                    onTouchEnd={(e) => {
                     e.stopPropagation()
                     setMailExpand(prev => ({...prev, hide: true, focusItem: false}))
-                    StyleHide('Mail')
                   }}
                   onTouchStart={(e) => e.stopPropagation()}
               >

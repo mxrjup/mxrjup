@@ -94,7 +94,6 @@ function App() {
   const [dragging, setDragging] = useState(false)
   const DesktopRef = useRef(null);
   const ProjectFolderRef = useRef(null);
-  const ResumeFolderRef = useRef(null);
   const BinRef = useRef(null);
   const DiskRef = useRef(null);
   const PictureRef = useRef(null)
@@ -597,142 +596,39 @@ function App() {
   }, []);
 
 
-  const handleOnDrag = (name, ref, type) => () => {
+  // Called on every move of a dragged icon: points dropTargetFolder at the open
+  // window under the icon, or clears it. Folder icons are matched by the component
+  // doing the drag, which calls this first and overrides the result on a hit.
+  const handleOnDrag = (name, ref) => () => {
     setDragging(true)
-    const iconRef = ref
-    if (iconRef && ResumeFolderRef.current && ProjectFolderRef.current) {
-      const BinRect = BinRef.current.getBoundingClientRect();
-      const iconRect = iconRef.getBoundingClientRect();
-      const resumeFolderRect = ResumeFolderRef.current.getBoundingClientRect();
-      const projectFolderRect = ProjectFolderRef.current.getBoundingClientRect();
-      const desktopRect = DesktopRef.current.getBoundingClientRect();
-      const diskRect = DiskRef.current.getBoundingClientRect();
-      const PictureRect = PictureRef.current.getBoundingClientRect();
-      const UtilityRect = UtilityRef.current.getBoundingClientRect();
+    if (!ref || name === 'MyComputer' || name === 'RecycleBin') return;
 
+    const windows = [
+      ...UserCreatedFolder.map((folder, i) => [folder.name, UserCreatedFolderRef.current[i]?.current]),
+      ['Utility', UtilityRef.current],
+      ['RecycleBin', BinRef.current],
+      ['Picture', PictureRef.current],
+      ['Project', ProjectFolderRef.current],
+      ['MyComputer', DiskRef.current],
+    ];
 
-      const offset = 55;
+    // The topmost element under the icon's centre, the icon itself aside. Closed
+    // windows are display: none and minimised ones pointer-events: none, so neither
+    // is ever hit, and of two overlapping windows the one in front wins.
+    const iconRect = ref.getBoundingClientRect();
+    const hit = document
+      .elementsFromPoint(iconRect.left + iconRect.width / 2, iconRect.top + iconRect.height / 2)
+      .find(el => !ref.contains(el));
+    const [folder] = windows.find(([, el]) => el && hit && el.contains(hit)) || [];
 
-      if (name === 'MyComputer' || name === 'RecycleBin') return; // prevent MyComputer from being dragged into folder
-
-      // Check for intersection with Desktop Icons that are Folders
-      // We loop through the desktopIcon state to find target folders on the desktop
-      const desktopFolders = desktopIcon.filter(icon => icon.folderId === 'Desktop' && icon.type === 'folder' && icon.name !== name);
-
-      for (const folder of desktopFolders) {
-        const folderX = folder.x;
-        const folderY = folder.y;
-        // Approximate size of folder icon (slightly smaller than container for better precision)
-        const folderSize = 60;
-
-        if (
-          iconRect.left < folderX + folderSize &&
-          iconRect.right > folderX &&
-          iconRect.top < folderY + folderSize &&
-          iconRect.bottom > folderY
-        ) {
-          setDropTargetFolder(folder.name); // Using name as ID for now as per existing logic
-          return;
-        }
-      }
-
-      // Check for intersection with UserCreated folders
-      for (let i = 0; i < UserCreatedFolderRef.current.length; i++) {
-        const ref = UserCreatedFolderRef.current[i];
-        if (ref && ref.current) {
-          const folderRect = ref.current.getBoundingClientRect();
-
-          if (
-            iconRect.left < folderRect.right - offset &&
-            iconRect.right > folderRect.left + offset &&
-            iconRect.top < folderRect.bottom - offset &&
-            iconRect.bottom > folderRect.top + offset
-          ) {
-            if (name === UserCreatedFolder[i].name) continue; // avoid self-drop
-            setDropTargetFolder(UserCreatedFolder[i].name);
-            return; // stop once matched
-          }
-        }
-      }
-      // utility
-      if (
-        iconRect.left < UtilityRect.right - offset &&
-        iconRect.right > UtilityRect.left + offset &&
-        iconRect.top < UtilityRect.bottom - offset &&
-        iconRect.bottom > UtilityRect.top + offset
-      ) {
-        if (name === 'Utility') return;
-        setDropTargetFolder('Utility');
-      }
-
-      else if (
-        iconRect.left < BinRect.right - offset &&
-        iconRect.right > BinRect.left + offset &&
-        iconRect.top < BinRect.bottom - offset &&
-        iconRect.bottom > BinRect.top + offset
-      ) {
-        if (name === 'RecycleBin') return;
-        setDropTargetFolder('RecycleBin');
-      }
-
-      // Check for intersection with the Picture folder
-      else if (
-        iconRect.left < PictureRect.right - offset &&
-        iconRect.right > PictureRect.left + offset &&
-        iconRect.top < PictureRect.bottom - offset &&
-        iconRect.bottom > PictureRect.top + offset
-      ) {
-        if (name === 'Picture') return;
-        setDropTargetFolder('Picture');
-      }
-
-      // Check for intersection with the Resume folder
-      else if (
-        iconRect.left < resumeFolderRect.right - offset &&
-        iconRect.right > resumeFolderRect.left + offset &&
-        iconRect.top < resumeFolderRect.bottom - offset &&
-        iconRect.bottom > resumeFolderRect.top + offset
-      ) {
-        if (name === 'Resume') return;
-        setDropTargetFolder('Resume');
-      }
-      // Check for intersection with the Project folder
-      else if (
-        iconRect.left < projectFolderRect.right - offset &&
-        iconRect.right > projectFolderRect.left + offset &&
-        iconRect.top < projectFolderRect.bottom - offset &&
-        iconRect.bottom > projectFolderRect.top + offset
-      ) {
-        if (name === 'Project') return;
-        setDropTargetFolder('Project');
-      }
-      // Check for intersection with the Disk 
-      else if (
-        iconRect.left < diskRect.right - offset &&
-        iconRect.right > diskRect.left + offset &&
-        iconRect.top < diskRect.bottom - offset &&
-        iconRect.bottom > diskRect.top + offset
-      ) {
-        // check within MyComputer
-        if (name === 'MyComputer') return;
-        // add new folder in this array
-        const validFolders = ['DiskC', 'DiskD', 'Resume', 'Project', 'Picture', 'RecycleBin', 'Utility', ...UserCreatedFolder.map(item => item.name)];
-        if (validFolders.includes(currentFolder)) {
-          setDropTargetFolder(currentFolder);
-        }
-      }
-      else if (
-        iconRect.left < desktopRect.right &&
-        iconRect.right > desktopRect.left &&
-        iconRect.top < desktopRect.bottom &&
-        iconRect.bottom > desktopRect.top
-      ) {
-        setDropTargetFolder('Desktop');
-      }
-      // Default case if not intersecting with any folder
-      else {
-        setDropTargetFolder('Desktop');
-      }
+    if (!folder || folder === name) {
+      setDropTargetFolder('');
+    } else if (folder === 'MyComputer') {
+      // My Computer shows whichever folder it is browsing; its root holds only drives.
+      const validFolders = ['DiskC', 'DiskD', 'Resume', 'Project', 'Picture', 'RecycleBin', 'Utility', ...UserCreatedFolder.map(item => item.name)];
+      setDropTargetFolder(validFolders.includes(currentFolder) && currentFolder !== name ? currentFolder : '');
+    } else {
+      setDropTargetFolder(folder);
     }
   };
 
@@ -947,7 +843,6 @@ function App() {
     handleOnDrag,
     DesktopRef,
     ProjectFolderRef,
-    ResumeFolderRef,
     DiskRef,
     handleDrop,
     dropTargetFolder, setDropTargetFolder,

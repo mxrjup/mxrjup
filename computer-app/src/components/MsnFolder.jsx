@@ -28,7 +28,6 @@ function MsnFolder() {
     chatData,
     MSNExpand, setMSNExpand,
     lastTapTime, setLastTapTime,
-    StyleHide,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,
@@ -296,12 +295,10 @@ function MsnFolder() {
               <div onClick={!isTouchDevice ? (e) => {
                 e.stopPropagation();
                 setMSNExpand(prev => ({ ...prev, hide: true, focusItem: false }));
-                StyleHide('MSN');
               } : undefined}
                 onTouchEnd={(e) => {
                   e.stopPropagation();
                   setMSNExpand(prev => ({ ...prev, hide: true, focusItem: false }));
-                  StyleHide('MSN');
                 }}
                 onTouchStart={(e) => e.stopPropagation()}
               >

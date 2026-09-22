@@ -57,7 +57,6 @@ function BgSetting() {
   const { 
     themeDragBar, setThemeDragBar,
     BgSettingExpand ,setBgSettingExpand,
-    StyleHide,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,
@@ -264,13 +263,11 @@ function BgSetting() {
               <div onClick={ !isTouchDevice ? (e) => {
                 e.stopPropagation()
                 setBgSettingExpand(prev => ({...prev, hide: true, focusItem: false}))
-                StyleHide('Settings')
               } : undefined
               }   
                 onTouchEnd={(e) => {
                 e.stopPropagation()
                 setBgSettingExpand(prev => ({...prev, hide: true, focusItem: false}))
-                StyleHide('Settings')
               }}
                 onTouchStart={(e) => e.stopPropagation()}
               >
