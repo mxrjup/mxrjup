@@ -244,8 +244,10 @@ charts and weekly totals only, no single play and no time of day. Nothing about 
 on the host.
 
 The page shows what the file holds and nothing more: a chart with 3 entries shows 3 (up
-to 50, the first 10 until *See All*), an empty section is left out, and the range switch
-only offers the ranges the history fills.
+to 50), an empty section is left out, and the range switch only offers the ranges the
+history fills. Collapsed, the artist and album grids show exactly two rows and the lists
+ten entries, the rest behind *See All*; the column counts live in both `stats.scss` and
+`GRID_STEPS` of `stats.ts` and must stay in step.
 
 ## Deploying
 

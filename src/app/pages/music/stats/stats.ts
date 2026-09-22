@@ -1,4 +1,4 @@
-import { Component, computed, signal, inject, OnInit } from '@angular/core';
+import { Component, computed, signal, inject, OnInit, OnDestroy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DataService } from '../../../services/data.service';
 
@@ -29,23 +29,38 @@ export interface StatsRange {
   genres: { rank: number; name: string; share: number }[];
 }
 
+// A record holder carries whichever figures its record is about.
 interface RecordHolder {
   name: string;
   artist?: string;
   image?: string;
   cover?: string;
-  weeks: number;
+  weeks?: number; // weeks at #1, or weeks of a top 10 run
+  tracks?: number; // different tracks played
+  plays?: number;
   from?: string;
   to?: string;
+  day?: string;
+}
+
+interface ByKind {
+  artists: RecordHolder[];
+  tracks: RecordHolder[];
+  albums: RecordHolder[];
 }
 
 export interface ListeningStats {
   through?: string;
   ranges?: StatsRange[];
   records?: {
-    weeksAtNumberOne: { artists: RecordHolder[]; tracks: RecordHolder[] };
-    longestTopTenRun: { artists: RecordHolder[]; tracks: RecordHolder[] };
+    weeksAtNumberOne: ByKind;
+    longestTopTenRun: ByKind;
     biggestWeeks: { from: string; to: string; plays: number }[];
+    longestStreak: { from: string; to: string; days: number }[];
+    mostPlayedInAWeek: RecordHolder[];
+    deepestCatalogue: RecordHolder[];
+    albumInADay: RecordHolder[];
+    onRepeat: RecordHolder[];
   };
 }
 
@@ -56,6 +71,14 @@ interface RecordCard {
   holders: { name: string; detail?: string; picture?: string; value: number; unit: string }[];
 }
 
+// Collapsed, a grid shows exactly two rows, so these column counts must match the
+// breakpoints of stats.scss; a list shows ten.
+const GRID_STEPS = [
+  { from: 901, artists: 8, albums: 5 },
+  { from: 681, artists: 6, albums: 4 },
+  { from: 461, artists: 4, albums: 3 },
+  { from: 0, artists: 3, albums: 2 }
+];
 const COLLAPSED = 10;
 const COMPARED_WITH: Record<string, string> = {
   '4w': 'previous 4 weeks',
@@ -77,10 +100,14 @@ const asDate = (day: string) => new Date(`${day}T00:00:00Z`);
   templateUrl: './stats.html',
   styleUrl: './stats.scss'
 })
-export class StatsComponent implements OnInit {
+export class StatsComponent implements OnInit, OnDestroy {
   private dataService = inject(DataService);
 
   stats = signal<ListeningStats>({});
+  // Which breakpoint the page is at, so a collapsed grid can hold whole rows.
+  private width = signal(typeof window === 'undefined' ? 1024 : window.innerWidth);
+  private onResize = () => this.width.set(window.innerWidth);
+  private columns = computed(() => GRID_STEPS.find((step) => this.width() >= step.from) ?? GRID_STEPS.at(-1)!);
   loaded = signal(false);
   selected = signal<string | null>(null);
   // Sections opened with "See All", by name.
@@ -106,40 +133,93 @@ export class StatsComponent implements OnInit {
   });
 
   recordCards = computed<RecordCard[]>(() => {
-    const records = this.stats().records;
-    if (!records) return [];
-    const weeks = (n: number) => (n === 1 ? 'week' : 'weeks');
+    const r = this.stats().records;
+    if (!r) return [];
+    const unit = (n: number, one: string) => (n === 1 ? one : `${one}s`);
+    // Every card reads the same way: a figure, what it belongs to, and where it happened.
+    const weeksAt = (kind: keyof ByKind, label: string, round: boolean) => ({
+      label,
+      round,
+      holders: r.weeksAtNumberOne[kind].map((h) => ({
+        name: h.name, detail: h.artist, picture: h.image ?? h.cover,
+        value: h.weeks ?? 0, unit: unit(h.weeks ?? 0, 'week')
+      }))
+    });
+    const topTenRun = (kind: keyof ByKind, label: string, round: boolean) => ({
+      label,
+      round,
+      holders: r.longestTopTenRun[kind].map((h) => ({
+        name: h.name,
+        detail: [h.artist, this.period(h.from, h.to)].filter(Boolean).join(' · '),
+        picture: h.image ?? h.cover,
+        value: h.weeks ?? 0, unit: unit(h.weeks ?? 0, 'week')
+      }))
+    });
+
     const cards: RecordCard[] = [
+      weeksAt('artists', 'Most weeks as #1 artist', true),
+      weeksAt('tracks', 'Most weeks as #1 track', false),
+      weeksAt('albums', 'Most weeks as #1 album', false),
       {
-        label: 'Most weeks as #1 artist',
+        label: 'Most tracks played · Artist',
         round: true,
-        holders: records.weeksAtNumberOne.artists.map((h) => ({ name: h.name, picture: h.image, value: h.weeks, unit: weeks(h.weeks) }))
+        holders: r.deepestCatalogue.map((h) => ({
+          name: h.name, picture: h.image, value: h.tracks ?? 0, unit: unit(h.tracks ?? 0, 'track')
+        }))
       },
+      topTenRun('artists', 'Longest run in the top 10 · Artist', true),
+      topTenRun('tracks', 'Longest run in the top 10 · Track', false),
+      topTenRun('albums', 'Longest run in the top 10 · Album', false),
       {
-        label: 'Most weeks as #1 track',
+        label: 'Most of an album in one day',
         round: false,
-        holders: records.weeksAtNumberOne.tracks.map((h) => ({ name: h.name, detail: h.artist, picture: h.cover, value: h.weeks, unit: weeks(h.weeks) }))
-      },
-      {
-        label: 'Longest run in the top 10 · Artist',
-        round: true,
-        holders: records.longestTopTenRun.artists.map((h) => ({ name: h.name, detail: this.period(h.from, h.to), picture: h.image, value: h.weeks, unit: weeks(h.weeks) }))
-      },
-      {
-        label: 'Longest run in the top 10 · Track',
-        round: false,
-        holders: records.longestTopTenRun.tracks.map((h) => ({ name: h.name, detail: `${h.artist} · ${this.period(h.from, h.to)}`, picture: h.cover, value: h.weeks, unit: weeks(h.weeks) }))
+        holders: r.albumInADay.map((h) => ({
+          name: h.name,
+          detail: [h.artist, this.day(h.day)].filter(Boolean).join(' · '),
+          picture: h.cover,
+          value: h.tracks ?? 0, unit: unit(h.tracks ?? 0, 'track')
+        }))
       },
       {
         label: 'Biggest weeks',
         round: false,
-        holders: records.biggestWeeks.map((w) => ({ name: this.period(w.from, w.to), value: w.plays, unit: w.plays === 1 ? 'play' : 'plays' }))
+        holders: r.biggestWeeks.map((w) => ({
+          name: this.period(w.from, w.to), value: w.plays, unit: unit(w.plays, 'play')
+        }))
+      },
+      {
+        label: 'Longest listening streak',
+        round: false,
+        holders: r.longestStreak.map((streak) => ({
+          name: this.period(streak.from, streak.to), value: streak.days, unit: unit(streak.days, 'day')
+        }))
+      },
+      {
+        label: 'Most plays of a track in a week',
+        round: false,
+        holders: r.mostPlayedInAWeek.map((h) => ({
+          name: h.name,
+          detail: [h.artist, this.period(h.from, h.to)].filter(Boolean).join(' · '),
+          picture: h.cover,
+          value: h.plays ?? 0, unit: unit(h.plays ?? 0, 'play')
+        }))
+      },
+      {
+        label: 'Played back to back',
+        round: false,
+        holders: r.onRepeat.map((h) => ({
+          name: h.name,
+          detail: [h.artist, this.day(h.day)].filter(Boolean).join(' · '),
+          picture: h.cover,
+          value: h.plays ?? 0, unit: 'in a row'
+        }))
       }
     ];
     return cards.filter((card) => card.holders.length);
   });
 
   ngOnInit() {
+    if (typeof window !== 'undefined') window.addEventListener('resize', this.onResize);
     this.dataService.getData<ListeningStats>('stats').subscribe({
       next: (data) => {
         this.stats.set(data ?? {});
@@ -149,13 +229,29 @@ export class StatsComponent implements OnInit {
     });
   }
 
+  ngOnDestroy() {
+    if (typeof window !== 'undefined') window.removeEventListener('resize', this.onResize);
+  }
+
   select(id: string) {
     this.selected.set(id);
   }
 
+  /** How many entries a section shows before "See All": two whole rows, or ten in a list. */
+  limit(section: string) {
+    if (section === 'artists') return this.columns().artists * 2;
+    if (section === 'albums') return this.columns().albums * 2;
+    return COLLAPSED;
+  }
+
   /** The first entries of a list, or all of them once its section is expanded. */
   shown<T>(list: T[], section: string, skip = 0): T[] {
-    return this.expanded()[section] ? list.slice(skip) : list.slice(skip, COLLAPSED);
+    return this.expanded()[section] ? list.slice(skip) : list.slice(skip, skip + this.limit(section));
+  }
+
+  /** Whether a section holds more than it shows collapsed. */
+  hasMore(list: unknown[], section: string, skip = 0) {
+    return list.length - skip > this.limit(section);
   }
 
   toggle(section: string) {
@@ -181,6 +277,11 @@ export class StatsComponent implements OnInit {
 
   percent(share: number) {
     return `${Math.round(share * 100)}%`;
+  }
+
+  /** "20 Sep 2026", or nothing when the record carries no day. */
+  day(value?: string) {
+    return value ? fullDate.format(asDate(value)) : '';
   }
 
   /** "25 Aug – 20 Sep 2026", the year given once when both ends share it. */

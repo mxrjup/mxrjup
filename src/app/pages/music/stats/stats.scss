@@ -213,10 +213,11 @@ li {
     font: 700 28px/1.2 var(--sf);
 }
 
+/* Fixed column counts, not auto-fill: collapsed, these grids show two whole rows, and
+   stats.ts slices the lists to match (GRID_STEPS). */
 .artist-grid,
 .album-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
     gap: 20px 16px;
 
     img,
@@ -228,8 +229,12 @@ li {
     }
 }
 
+.artist-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
 .album-grid {
-    grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 
     .cover {
         border-radius: 8px;
@@ -326,7 +331,7 @@ li {
 
 .records {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
 }
 
@@ -336,6 +341,12 @@ li {
 
 .record-label {
     font-size: 13px;
+}
+
+/* A card is narrower than a list row: let the dates and artist wrap rather than
+   cut "25 Dec 2023 - 29 Dec 2024" in half. */
+.record .row-sub {
+    white-space: normal;
 }
 
 .record-lead {
@@ -396,7 +407,19 @@ li {
     font-family: var(--font-mono);
 }
 
-@media (max-width: 768px) {
+/* The three breakpoints below are the ones GRID_STEPS knows about, so a collapsed
+   grid never leaves a half-empty row. */
+@media (max-width: 900px) {
+    .artist-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .album-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .records { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 680px) {
+    .artist-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .album-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .records { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
     .hero-art {
         width: 96px;
         height: 96px;
@@ -406,8 +429,10 @@ li {
     .record-value {
         font-size: 22px;
     }
+}
 
-    .album-grid {
-        grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
-    }
+@media (max-width: 460px) {
+    .artist-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .records { grid-template-columns: minmax(0, 1fr); }
 }
