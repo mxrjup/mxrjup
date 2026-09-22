@@ -9,12 +9,13 @@ const TYPE_COLORS: Record<string, string> = {
   PRODUCT: '#d1d1d1',
   ARTICLE: '#c2c2c2',
   MUSIC: '#b3b3b3',
-  IMAGE: '#a4a4a4'
+  IMAGE: '#a4a4a4',
+  'SKATE PART': '#959595'
 };
 
 interface CoolThing {
   id: string;
-  type: 'BOOK' | 'PRODUCT' | 'ARTICLE' | 'MUSIC' | 'IMAGE';
+  type: 'BOOK' | 'PRODUCT' | 'ARTICLE' | 'MUSIC' | 'IMAGE' | 'SKATE PART';
   title: string;
   subtitle?: string;
   image: string;
