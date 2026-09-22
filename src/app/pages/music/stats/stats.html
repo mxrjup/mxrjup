@@ -31,7 +31,7 @@
     <section class="section">
         <div class="section-head">
             <h2>Top Artists</h2>
-            @if (r.artists.length > 10) {
+            @if (hasMore(r.artists, 'artists', 1)) {
             <button type="button" class="see-all" (click)="toggle('artists')">{{ expanded()['artists'] ? 'Show Less' : 'See All' }}</button>
             }
         </div>
@@ -80,7 +80,7 @@
     <section class="section">
         <div class="section-head">
             <h2>Top Tracks</h2>
-            @if (r.tracks.length > 10) {
+            @if (hasMore(r.tracks, 'tracks')) {
             <button type="button" class="see-all" (click)="toggle('tracks')">{{ expanded()['tracks'] ? 'Show Less' : 'See All' }}</button>
             }
         </div>
@@ -113,7 +113,7 @@
     <section class="section">
         <div class="section-head">
             <h2>Top Albums</h2>
-            @if (r.albums.length > 10) {
+            @if (hasMore(r.albums, 'albums')) {
             <button type="button" class="see-all" (click)="toggle('albums')">{{ expanded()['albums'] ? 'Show Less' : 'See All' }}</button>
             }
         </div>
@@ -143,7 +143,7 @@
     <section class="section">
         <div class="section-head">
             <h2>Top Genres</h2>
-            @if (r.genres.length > 10) {
+            @if (hasMore(r.genres, 'genres')) {
             <button type="button" class="see-all" (click)="toggle('genres')">{{ expanded()['genres'] ? 'Show Less' : 'See All' }}</button>
             }
         </div>
