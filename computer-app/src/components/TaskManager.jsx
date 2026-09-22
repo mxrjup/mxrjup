@@ -11,12 +11,10 @@ function TaskManager() {
   const [selectedItemToClose, setSelectedItemToClose] = useState('');
 
     const { 
-    btcShow,
     setShutdownWindow,
     TaskManagerExpand, setTaskManagerExpand,
     themeDragBar,
     ObjectState,
-    StyleHide,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,
@@ -90,13 +88,11 @@ function TaskManager() {
               <div onClick={ !isTouchDevice? (e) => {
                 e.stopPropagation()
                 setTaskManagerExpand(prev => ({...prev, hide: true, focusItem: false}))
-                StyleHide('TaskManager') 
               } : undefined
             }
                    onTouchEnd={(e) => {
                     e.stopPropagation()
                     setTaskManagerExpand(prev => ({...prev, hide: true, focusItem: false}))
-                    StyleHide('TaskManager')
                   }}
                     onTouchStart={(e) => e.stopPropagation()}
               >

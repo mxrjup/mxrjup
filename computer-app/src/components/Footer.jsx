@@ -3,12 +3,9 @@ import UseContext from '../Context'
 import { motion, AnimatePresence } from 'framer-motion';
 import startIcon from '../assets/95icon.png';
 import run from '../assets/run.png';
-import github from '../assets/github.png';
-import tile from '../assets/tile.png';
 import sidebar from '../assets/sidebar95.png';
 import display from '../assets/display.png';
 import project from '../assets/regFolder.png';
-import resume from '../assets/folder.png';
 import shutdownicon from '../assets/shutdownicon.png';
 import settings from '../assets/setting.png';
 import { clippyPhrase, clippySuggest } from './function/ClippyFunction';
@@ -28,21 +25,16 @@ export default function Footer() {
     const calenderRef = useRef(null);
     const startPopUpRef = useRef(null)
     const projectRef = useRef(null)
-    const resumeRef = useRef(null)
     const [calValue, calOnChange] = useState(new Date());
     const [width, setWidth] = useState(0);
     const [reRenderFooter, setRerenderFooter] = useState(0)
 
     const {
         deleteTap,
-        tileScreen, setTileScreen,
         onlineUser,
-        newsPopup, setNewsPopup,
-        btcShow, setBtcShow,
         isTouchDevice,
         desktopIcon,
         projectStartBar, setProjectStartBar,
-        resumeStartBar, setResumejectStartBar,
         calenderToggle, setCalenderToggle,
         iconTextSize,
         iconScreenSize, setIconScreenSize,
@@ -55,7 +47,6 @@ export default function Footer() {
         imageMapping,
         handleShow,
         StyleHide,
-        setWinampExpand,
         showClippy, setShowClippy,
         clippyIndex, setClippyIndex,
         randomClippyPopup, setRandomClippyPopup,
@@ -67,10 +58,7 @@ export default function Footer() {
         SecondRandomTimeoutShowClippy,
         ClearTOclippySendemailfunction,
         ClearTOclippyThanksYouFunction,
-        ClearTOSongfunction,
-        clippySong,
         ClearTOdonttouch,
-        handleDoubleClickEnterLink,
         ObjectState,
         setShutdownWindow,
         ClearTOclippyUsernameFunction,
@@ -87,11 +75,9 @@ export default function Footer() {
             arrow: true,
             onClick: () => {
                 setProjectStartBar(!projectStartBar)
-                setResumejectStartBar(false)
             },
             onmouseenter: () => {
                 setProjectStartBar(true)
-                setResumejectStartBar(false)
             },
         },
         {
@@ -99,7 +85,6 @@ export default function Footer() {
             imgSrc: sidebar,
             imgAlt: "sidebar",
             onmouseenter: () => {
-                setResumejectStartBar(false);
                 setProjectStartBar(false);
             },
         },
@@ -110,7 +95,6 @@ export default function Footer() {
             spanText: "Settings",
             onClick: () => handleShow('Settings'),
             onmouseenter: () => {
-                setResumejectStartBar(false);
                 setProjectStartBar(false);
             },
         },
@@ -124,7 +108,6 @@ export default function Footer() {
                 remountRunPosition()
             },
             onmouseenter: () => {
-                setResumejectStartBar(false);
                 setProjectStartBar(false);
             },
         },
@@ -141,7 +124,6 @@ export default function Footer() {
                 setStartActive(false)
             },
             onmouseenter: () => {
-                setResumejectStartBar(false);
                 setProjectStartBar(false);
             },
         }
@@ -162,19 +144,14 @@ export default function Footer() {
         const handleMouseMove = (event) => {
             const startPopupContainer = startPopUpRef.current;
             const projectContainer = projectRef.current;
-            const resumeContainer = resumeRef.current;
 
             if (startPopupContainer) {
                 const startRect = startPopupContainer.getBoundingClientRect();
 
                 let projectRect = null;
-                let resumeRect = null;
 
                 if (projectContainer) {
                     projectRect = projectContainer.getBoundingClientRect();
-                }
-                if (resumeContainer) {
-                    resumeRect = resumeContainer.getBoundingClientRect();
                 }
 
                 const isMouseOutsideStart =
@@ -190,16 +167,8 @@ export default function Footer() {
                     event.clientY > projectRect.bottom
                     : true;
 
-                const isMouseOutsideResume = resumeRect
-                    ? event.clientX < resumeRect.left ||
-                    event.clientX > resumeRect.right ||
-                    event.clientY < resumeRect.top ||
-                    event.clientY > resumeRect.bottom
-                    : true;
-
-                if (isMouseOutsideStart && isMouseOutsideProject && isMouseOutsideResume) {
+                if (isMouseOutsideStart && isMouseOutsideProject) {
                     setProjectStartBar(false);
-                    setResumejectStartBar(false);
                 }
             }
         };
@@ -222,7 +191,6 @@ export default function Footer() {
     useEffect(() => {
         if (!startActive) {
             setProjectStartBar(false)
-            setResumejectStartBar(false)
         }
     }, [startActive])
 
@@ -284,15 +252,6 @@ export default function Footer() {
                 item.setter(prev => ({ ...prev, focusItem: true }));
                 if (item.usestate.hide) {
                     item.setter(prev => ({ ...prev, hide: false }));
-                    if (lowerCaseName === 'winamp') {
-                        const webampElement = document.querySelector('#webamp');
-                        if (webampElement) {
-                            webampElement.style.opacity = 1;
-                            webampElement.style.pointerEvents = 'auto';
-                            webampElement.style.touchAction = 'auto'
-                            setWinampExpand(prev => ({ ...prev, hide: false }));
-                        }
-                    }
                 }
             }
 
@@ -307,7 +266,6 @@ export default function Footer() {
         clearTimeout(firstTimoutShowclippy.current)
         clearTimeout(ClearTOclippySendemailfunction.current)
         clearTimeout(ClearTOclippyThanksYouFunction.curremt)
-        clearTimeout(ClearTOSongfunction.current)
         clearTimeout(ClearTOclippyUsernameFunction.current)
 
         setShowClippy(true)
@@ -327,7 +285,6 @@ export default function Footer() {
 
         clearTimeout(ClearTOclippySendemailfunction.current)
         clearTimeout(ClearTOclippyThanksYouFunction.curremt)
-        clearTimeout(ClearTOSongfunction.current)
 
         RandomTimeoutShowClippy.current = setTimeout(() => { // random clippy index from length
             const randomIndex = Math.floor(Math.random() * clippyPhrase.inspiration.length)
@@ -362,7 +319,6 @@ export default function Footer() {
         if (clippyThanks) return clippySuggest[1];
         if (clippyTouched) return clippyPhrase.interruption[0].phrase;
         if (clippySendemail) return clippySuggest[0]
-        if (clippySong) return clippySuggest[2]
         if (clippyUsername) return chatDown ? clippySuggest[4] : onlineUser < 2 ? clippySuggest[5] : clippySuggest[3]
 
         return clippyPhrase.inspiration[clippyIndex].phrase // return default from phrase
@@ -373,15 +329,11 @@ export default function Footer() {
             setClippyIndex(1);
             return;
         }
-        if (clippySong) {
-            setClippyIndex(7);
-            return;
-        }
         if (clippyUsername) {
             setClippyIndex(2);
             return;
         }
-    }, [clippySendemail, clippySong, clippyUsername]);
+    }, [clippySendemail, clippyUsername]);
 
     const iconSizeSelection = [
         { label: '360x640', value: 1 },
@@ -392,7 +344,6 @@ export default function Footer() {
     ];
 
     const projectFolderItem = desktopIcon.filter(icon => icon.folderId === 'Project').length
-    const resumeFolderItem = desktopIcon.filter(icon => icon.folderId === 'Resume').length
 
     const recycleBin = desktopIcon.filter(icon => icon.folderId === 'RecycleBin');
     const recycleBinLength = recycleBin.length;

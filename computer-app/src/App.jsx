@@ -23,13 +23,11 @@ import ErrorBtn from './components/ErrorBtn';
 import RightClickWindows from './components/RightClickWindows';
 import loadingSpin from './assets/loading.gif'
 import Patch from './components/Patch';
-import WindowsDragLogin from './components/WindowsDragLogin';
 import UploadApp from './components/UploadApp';
 import TaskManager from './components/TaskManager';
 import {
   StyleHide, imageMapping,
-  handleDoubleClickEnterLink, handleDoubleTapEnterMobile,
-  handleDoubleClickiframe, handleDoubleTapiframeMobile,
+  handleDoubleClickiframe,
   iconContainerSize, iconImgSize, iconTextSize,
   handleDoubleClickPhotoOpen,
 } from './components/function/AppFunctions';
@@ -38,12 +36,8 @@ import {
 function App() {
   const [backTrackIe, setBackTrackIe] = useState([]);
   const [forwardTrackIe, setForwardTrackIe] = useState([]);
-  const [itemIsBeingDeleted, setItemIsBeingDeleted] = useState('')
-  const [itemBeingSelected, setItemBeingSelected] = useState(null)
-  const [installIcon, setInstallIcon] = useState(0)
   const [currentRightClickFolder, setCurrentRightClickFolder] = useState('Desktop')
   const [ringMsn, setRingMsn] = useState(false)
-  const [showChart, setShowChart] = useState(false)
   const [keyRef, setKeyRef] = useState(0)
   const [localBg, setLocalBg] = useState(() => {
     const prevBg = localStorage.getItem('background')
@@ -54,33 +48,7 @@ function App() {
     return prevEffect ? prevEffect : null
   })
   const [websocketConnection, setWebsocketConnection] = useState(true)
-  const [Cel, setCel] = useState(true); // Celsius or Fahrenheit
-  const [weather, setWeather] = useState(() => {
-    const storedTempF = localStorage.getItem('tempF');
-    const storedIconCode = localStorage.getItem('iconCode');
-    if (storedTempF && storedIconCode) {
-      return { temp: JSON.parse(storedTempF), code: parseInt(storedIconCode) };
-    }
-    return null;
-  });
-
-  const [city, setCity] = useState(() => {
-    const storedCity = localStorage.getItem('city');
-    return storedCity ? JSON.parse(storedCity) : null;
-  });
-  const [bgRotation, setBgRotation] = useState(() => {
-    const saved = JSON.parse(localStorage.getItem('isWallpaperOn'));
-    if (saved?.bgRotation !== undefined) return saved.bgRotation;
-    localStorage.setItem('isWallpaperOn', JSON.stringify({ bgRotation: true }));
-    return true;
-  });
-
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
-  const [tileBG, setTileBG] = useState('#098684')
-  const [tileScreen, setTileScreen] = useState(false)
   const [chatBotActive, setChatBotActive] = useState(false);
-  const [runCatVideo, setRunCatVideo] = useState(false)
-  const [newsPopup, setNewsPopup] = useState(false)
   const [onlineUser, setOnlineUser] = useState(0)
   const [sortedIcon, setSortedIcon] = useState([])
   const [sortIconTrigger, setSortIconTrigger] = useState(0)
@@ -109,7 +77,6 @@ function App() {
   const [selectedFolder, setSelectedFolder] = useState({ label: 'MyComputer', img: imageMapping('MyComputer') })
   const [currentFolder, setCurrentFolder] = useState('MyComputer')
   const [loading, setLoading] = useState(true)
-  const [resumeStartBar, setResumejectStartBar] = useState(false)
   const [projectStartBar, setProjectStartBar] = useState(false)
   const [calenderToggle, setCalenderToggle] = useState(false)
   const [iconScreenSize, setIconScreenSize] = useState(() => {
@@ -127,7 +94,6 @@ function App() {
   const [dragging, setDragging] = useState(false)
   const DesktopRef = useRef(null);
   const ProjectFolderRef = useRef(null);
-  const ResumeFolderRef = useRef(null);
   const BinRef = useRef(null);
   const DiskRef = useRef(null);
   const PictureRef = useRef(null)
@@ -150,7 +116,6 @@ function App() {
   const [chatData, setChatData] = useState([])
   const [shutdownWindow, setShutdownWindow] = useState(false)
   const ClearTOdonttouch = useRef(null);
-  const ClearTOSongfunction = useRef(null);
   const ClearTOclippySendemailfunction = useRef(null);
   const ClearTOclippyThanksYouFunction = useRef(null);
   const ClearTOclippyUsernameFunction = useRef(null);
@@ -158,7 +123,6 @@ function App() {
   const RandomTimeoutShowClippy = useRef(null);
   const SecondRandomTimeoutShowClippy = useRef(null);
   const [clippyUsername, setClippyUsername] = useState(false)
-  const [clippySong, setClippySong] = useState(false)
   const [clippySendemail, setClippySendemail] = useState(false)
   const [clippyThanks, setClippyThanks] = useState(false)
   const [clippyTouched, setClippyTouched] = useState(false)
@@ -230,14 +194,6 @@ function App() {
   /* -------------------------------------------------------------------------- */
   const [lastTapTime, setLastTapTime] = useState(0)
   const [projectUrl, setProjectUrl] = useState('')
-  const [MybioExpand, setMybioExpand] = useState(
-    {
-      expand: false, // fullscreen
-      show: false, // show folder when double clicked
-      hide: false, // hide folder to the tap
-      focusItem: true, // decide if item is being clicked on or not
-      x: 0, y: 0, // position before fullscreen
-    });
   const [ResumeExpand, setResumeExpand] = useState(
     { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
 
@@ -248,21 +204,6 @@ function App() {
     });
 
   const [MailExpand, setMailExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
-  const [NftExpand, setNftExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
-  const [NoteExpand, setNoteExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
-  const [TypeExpand, setTypeExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
-  const [WinampExpand, setWinampExpand] = useState(
-    { focus: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
-  const [ResumeFileExpand, setResumeFileExpand] = useState(
     { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
 
   const [openProjectExpand, setOpenProjectExpand] = useState(
@@ -280,11 +221,7 @@ function App() {
   const [desktopIcon, setDesktopIcon] = useState(() => {
     const localItems = localStorage.getItem('icons');
 
-    const deleteIcon = ['Cat', 'AiAgent', 'Winamp', '3dObject'];
-
-    const filteredItems = iconInfo.filter(item => !deleteIcon.includes(item.name));
-
-    const parsedItems = localItems ? JSON.parse(localItems) : filteredItems;
+    const parsedItems = localItems ? JSON.parse(localItems) : iconInfo;
 
 
     return parsedItems;
@@ -317,13 +254,7 @@ function App() {
   const [TaskManagerExpand, setTaskManagerExpand] = useState(
     { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
 
-  const [StoreExpand, setStoreExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
   const [UploadExpand, setUploadExpand] = useState(
-    { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
-
-  const [btcShow, setBtcShow] = useState(
     { expand: false, show: false, hide: false, focusItem: true, x: 0, y: 0, zIndex: 1, });
 
   const [UserCreatedFolder, setUserCreatedFolder] = useState(() => {
@@ -372,8 +303,8 @@ function App() {
   }
 
   // Define all state setter functions and corresponding clear functions in an array
-  const allSetters = [setClippyThanks, setClippySendemail, setClippySong, setClippyUsername];
-  const allClears = [ClearTOclippyThanksYouFunction, ClearTOclippySendemailfunction, ClearTOSongfunction, ClearTOclippyUsernameFunction];
+  const allSetters = [setClippyThanks, setClippySendemail, setClippyUsername];
+  const allClears = [ClearTOclippyThanksYouFunction, ClearTOclippySendemailfunction, ClearTOclippyUsernameFunction];
 
   useEffect(() => { // force user to update version by clearing their local storage!
     // setTimeout(() => {
@@ -393,10 +324,6 @@ function App() {
   useEffect(() => {
     const handleRightClick = (e) => {
       e.preventDefault();
-
-      if (tileScreen) {
-        return;
-      }
 
       const iconRect = refBeingClicked.current?.getBoundingClientRect();
       setRightClickPosition({ x: e.clientX, y: e.clientY });
@@ -420,15 +347,11 @@ function App() {
     return () => {
       document.removeEventListener("contextmenu", handleRightClick);
     };
-  }, [tileScreen]);
+  }, []);
 
 
   useEffect(() => {
     const handleTouchStart = (e) => {
-
-      if (tileScreen) {
-        return;
-      }
 
       if (dragging) return; // Prevent duplicate triggers
 
@@ -454,7 +377,7 @@ function App() {
       document.removeEventListener("touchmove", handleTouchEnd);
       document.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [tileScreen]);
+  }, []);
 
 
   function handleMobileLongPress(e, icon) { // long press icon on mobile
@@ -673,142 +596,39 @@ function App() {
   }, []);
 
 
-  const handleOnDrag = (name, ref, type) => () => {
+  // Called on every move of a dragged icon: points dropTargetFolder at the open
+  // window under the icon, or clears it. Folder icons are matched by the component
+  // doing the drag, which calls this first and overrides the result on a hit.
+  const handleOnDrag = (name, ref) => () => {
     setDragging(true)
-    const iconRef = ref
-    if (iconRef && ResumeFolderRef.current && ProjectFolderRef.current) {
-      const BinRect = BinRef.current.getBoundingClientRect();
-      const iconRect = iconRef.getBoundingClientRect();
-      const resumeFolderRect = ResumeFolderRef.current.getBoundingClientRect();
-      const projectFolderRect = ProjectFolderRef.current.getBoundingClientRect();
-      const desktopRect = DesktopRef.current.getBoundingClientRect();
-      const diskRect = DiskRef.current.getBoundingClientRect();
-      const PictureRect = PictureRef.current.getBoundingClientRect();
-      const UtilityRect = UtilityRef.current.getBoundingClientRect();
+    if (!ref || name === 'MyComputer' || name === 'RecycleBin') return;
 
+    const windows = [
+      ...UserCreatedFolder.map((folder, i) => [folder.name, UserCreatedFolderRef.current[i]?.current]),
+      ['Utility', UtilityRef.current],
+      ['RecycleBin', BinRef.current],
+      ['Picture', PictureRef.current],
+      ['Project', ProjectFolderRef.current],
+      ['MyComputer', DiskRef.current],
+    ];
 
-      const offset = 55;
+    // The topmost element under the icon's centre, the icon itself aside. Closed
+    // windows are display: none and minimised ones pointer-events: none, so neither
+    // is ever hit, and of two overlapping windows the one in front wins.
+    const iconRect = ref.getBoundingClientRect();
+    const hit = document
+      .elementsFromPoint(iconRect.left + iconRect.width / 2, iconRect.top + iconRect.height / 2)
+      .find(el => !ref.contains(el));
+    const [folder] = windows.find(([, el]) => el && hit && el.contains(hit)) || [];
 
-      if (name === 'MyComputer' || name === 'RecycleBin') return; // prevent MyComputer from being dragged into folder
-
-      // Check for intersection with Desktop Icons that are Folders
-      // We loop through the desktopIcon state to find target folders on the desktop
-      const desktopFolders = desktopIcon.filter(icon => icon.folderId === 'Desktop' && icon.type === 'folder' && icon.name !== name);
-
-      for (const folder of desktopFolders) {
-        const folderX = folder.x;
-        const folderY = folder.y;
-        // Approximate size of folder icon (slightly smaller than container for better precision)
-        const folderSize = 60;
-
-        if (
-          iconRect.left < folderX + folderSize &&
-          iconRect.right > folderX &&
-          iconRect.top < folderY + folderSize &&
-          iconRect.bottom > folderY
-        ) {
-          setDropTargetFolder(folder.name); // Using name as ID for now as per existing logic
-          return;
-        }
-      }
-
-      // Check for intersection with UserCreated folders
-      for (let i = 0; i < UserCreatedFolderRef.current.length; i++) {
-        const ref = UserCreatedFolderRef.current[i];
-        if (ref && ref.current) {
-          const folderRect = ref.current.getBoundingClientRect();
-
-          if (
-            iconRect.left < folderRect.right - offset &&
-            iconRect.right > folderRect.left + offset &&
-            iconRect.top < folderRect.bottom - offset &&
-            iconRect.bottom > folderRect.top + offset
-          ) {
-            if (name === UserCreatedFolder[i].name) continue; // avoid self-drop
-            setDropTargetFolder(UserCreatedFolder[i].name);
-            return; // stop once matched
-          }
-        }
-      }
-      // utility
-      if (
-        iconRect.left < UtilityRect.right - offset &&
-        iconRect.right > UtilityRect.left + offset &&
-        iconRect.top < UtilityRect.bottom - offset &&
-        iconRect.bottom > UtilityRect.top + offset
-      ) {
-        if (name === 'Utility') return;
-        setDropTargetFolder('Utility');
-      }
-
-      else if (
-        iconRect.left < BinRect.right - offset &&
-        iconRect.right > BinRect.left + offset &&
-        iconRect.top < BinRect.bottom - offset &&
-        iconRect.bottom > BinRect.top + offset
-      ) {
-        if (name === 'RecycleBin') return;
-        setDropTargetFolder('RecycleBin');
-      }
-
-      // Check for intersection with the Picture folder
-      else if (
-        iconRect.left < PictureRect.right - offset &&
-        iconRect.right > PictureRect.left + offset &&
-        iconRect.top < PictureRect.bottom - offset &&
-        iconRect.bottom > PictureRect.top + offset
-      ) {
-        if (name === 'Picture') return;
-        setDropTargetFolder('Picture');
-      }
-
-      // Check for intersection with the Resume folder
-      else if (
-        iconRect.left < resumeFolderRect.right - offset &&
-        iconRect.right > resumeFolderRect.left + offset &&
-        iconRect.top < resumeFolderRect.bottom - offset &&
-        iconRect.bottom > resumeFolderRect.top + offset
-      ) {
-        if (name === 'Resume') return;
-        setDropTargetFolder('Resume');
-      }
-      // Check for intersection with the Project folder
-      else if (
-        iconRect.left < projectFolderRect.right - offset &&
-        iconRect.right > projectFolderRect.left + offset &&
-        iconRect.top < projectFolderRect.bottom - offset &&
-        iconRect.bottom > projectFolderRect.top + offset
-      ) {
-        if (name === 'Project') return;
-        setDropTargetFolder('Project');
-      }
-      // Check for intersection with the Disk 
-      else if (
-        iconRect.left < diskRect.right - offset &&
-        iconRect.right > diskRect.left + offset &&
-        iconRect.top < diskRect.bottom - offset &&
-        iconRect.bottom > diskRect.top + offset
-      ) {
-        // check within MyComputer
-        if (name === 'MyComputer') return;
-        // add new folder in this array
-        const validFolders = ['DiskC', 'DiskD', 'Resume', 'Project', 'Picture', 'RecycleBin', 'Utility', ...UserCreatedFolder.map(item => item.name)];
-        if (validFolders.includes(currentFolder)) {
-          setDropTargetFolder(currentFolder);
-        }
-      }
-      else if (
-        iconRect.left < desktopRect.right &&
-        iconRect.right > desktopRect.left &&
-        iconRect.top < desktopRect.bottom &&
-        iconRect.bottom > desktopRect.top
-      ) {
-        setDropTargetFolder('Desktop');
-      }
-      // Default case if not intersecting with any folder
-      else {
-        setDropTargetFolder('Desktop');
-      }
+    if (!folder || folder === name) {
+      setDropTargetFolder('');
+    } else if (folder === 'MyComputer') {
+      // My Computer shows whichever folder it is browsing; its root holds only drives.
+      const validFolders = ['DiskC', 'DiskD', 'Resume', 'Project', 'Picture', 'RecycleBin', 'Utility', ...UserCreatedFolder.map(item => item.name)];
+      setDropTargetFolder(validFolders.includes(currentFolder) && currentFolder !== name ? currentFolder : '');
+    } else {
+      setDropTargetFolder(folder);
     }
   };
 
@@ -961,15 +781,10 @@ function App() {
   const contextValue = {
     forwardTrackIe, setForwardTrackIe,
     backTrackIe, setBackTrackIe,
-    itemIsBeingDeleted, setItemIsBeingDeleted,
-    itemBeingSelected, setItemBeingSelected,
-    installIcon, setInstallIcon,
-    StoreExpand, setStoreExpand,
     deletepermanently,
     currentRightClickFolder, setCurrentRightClickFolder,
     ringMsn, setRingMsn,
     ringMsnOff,
-    showChart, setShowChart,
     setRegErrorPopUp, setRegErrorPopUpVal,
     keyRef, setKeyRef,
     UserCreatedFolder, setUserCreatedFolder,
@@ -978,17 +793,8 @@ function App() {
     localBg, setLocalBg,
     connectWebSocket,
     websocketConnection, setWebsocketConnection,
-    city, setCity,
-    Cel, setCel,
-    weather, setWeather,
-    bgRotation, setBgRotation,
-    backgroundImageUrl, setBackgroundImageUrl,
-    tileBG, setTileBG,
-    tileScreen, setTileScreen,
     chatBotActive, setChatBotActive,
     PatchExpand, setPatchExpand,
-    runCatVideo, setRunCatVideo,
-    newsPopup, setNewsPopup,
     onlineUser,
     UtilityRef,
     PaintExpand, setPaintExpand,
@@ -1022,9 +828,7 @@ function App() {
     selectedFolder, setSelectedFolder,
     currentFolder, setCurrentFolder,
     MyComputerExpand, setMyComputerExpand,
-    btcShow, setBtcShow,
     projectStartBar, setProjectStartBar,
-    resumeStartBar, setResumejectStartBar,
     calenderToggle, setCalenderToggle,
     iconContainerSize, iconImgSize, iconTextSize,
     iconScreenSize, setIconScreenSize,
@@ -1039,7 +843,6 @@ function App() {
     handleOnDrag,
     DesktopRef,
     ProjectFolderRef,
-    ResumeFolderRef,
     DiskRef,
     handleDrop,
     dropTargetFolder, setDropTargetFolder,
@@ -1048,7 +851,6 @@ function App() {
     time, setTime,
     desktopIcon, setDesktopIcon,
     UserCreatedFolder, setUserCreatedFolder, // Expose UserCreatedFolder and its setter
-    MybioExpand, setMybioExpand,
     tap, setTap,
     imageMapping,
     lastTapTime, setLastTapTime,
@@ -1058,14 +860,7 @@ function App() {
     isTouchDevice, setIsTouchDevice,
     ProjectExpand, setProjectExpand,
     MailExpand, setMailExpand,
-    NftExpand, setNftExpand,
-    NoteExpand, setNoteExpand,
-    TypeExpand, setTypeExpand,
-    handleDoubleTapEnterMobile,
-    handleDoubleClickEnterLink,
     handleDoubleClickiframe,
-    handleDoubleTapiframeMobile,
-    WinampExpand, setWinampExpand,
     showClippy, setShowClippy,
     clippyIndex, setClippyIndex,
     randomClippyPopup, setRandomClippyPopup,
@@ -1079,10 +874,6 @@ function App() {
     SecondRandomTimeoutShowClippy,
     ClearTOclippySendemailfunction,
     ClearTOclippyThanksYouFunction,
-    ResumeFileExpand, setResumeFileExpand,
-    clippySong, setClippySong,
-    clippySongFunction,
-    ClearTOSongfunction,
     ClearTOdonttouch,
     ObjectState,
     handleSetFocusItemTrue,
@@ -1123,7 +914,6 @@ function App() {
     return (
       <UserContext.Provider value={contextValue}>
         <Login />
-        <WindowsDragLogin />
       </UserContext.Provider>
     )
   }
@@ -1159,19 +949,9 @@ function App() {
     )
   }
 
-  // // show login page
-  // if(tileScreen ) {
-  //   return(
-  //     <UserContext.Provider value={contextValue}>
-  //       <WindowsDragLogin/>
-  //     </UserContext.Provider>
-  //   )
-  // }
-
   return (
     <>
       <UserContext.Provider value={contextValue}>
-        <WindowsDragLogin />
         {regErrorPopUp && (
           <ErrorBtn
             themeDragBar={themeDragBar}
@@ -1264,9 +1044,7 @@ function App() {
 
 
   function deletepermanently(deleteName) { // delete from desktopIcon
-    if (deleteName === 'Store') return;
 
-    setItemIsBeingDeleted(deleteName)
     // console.log(deleteName)
     deleteTap(deleteName)
     const droppedIcon = desktopIcon.find(icon => icon.name === deleteName);
@@ -1471,20 +1249,11 @@ function App() {
   function ObjectState() {
     return [
 
-      { name: 'About', setter: setMybioExpand, usestate: MybioExpand, color: 'rgba(46, 108, 176, 0.85)', size: 'small' },
       { name: 'Resume', setter: setResumeExpand, usestate: ResumeExpand, color: 'rgba(65, 138, 68, 0.85)', size: 'small' },
       { name: 'Project', setter: setProjectExpand, usestate: ProjectExpand, color: 'rgba(211, 117, 0, 0.85)', size: 'small' },
       { name: 'Picture', setter: setPictureExpand, usestate: pictureExpand, color: 'rgba(85, 50, 148, 0.85)', size: 'large' },
       { name: 'Mail', setter: setMailExpand, usestate: MailExpand, color: 'rgba(178, 26, 77, 0.85)', size: 'small' },
-      { name: 'Nft', setter: setNftExpand, usestate: NftExpand, color: 'rgba(142, 29, 126, 0.85)', size: 'small' },
-      { name: 'Note', setter: setNoteExpand, usestate: NoteExpand, color: 'rgba(114, 81, 54, 0.85)', size: 'small' },
-      { name: 'AiAgent', setter: setOpenProjectExpand, usestate: openProjectExpand, color: 'rgba(82, 117, 132, 0.85)', size: 'small' },
-      { name: '3dObject', setter: setOpenProjectExpand, usestate: openProjectExpand, color: 'rgba(0, 159, 186, 0.85)', size: 'small' },
-      { name: 'PixelPic', setter: setOpenProjectExpand, usestate: openProjectExpand, color: 'rgba(0, 159, 186, 0.85)', size: 'small' },
       { name: 'IE', setter: setOpenProjectExpand, usestate: openProjectExpand, color: 'rgba(0, 159, 186, 0.85)', size: 'small' },
-      { name: 'Fortune', setter: setOpenProjectExpand, usestate: openProjectExpand, color: 'rgba(224, 88, 43, 0.85)', size: 'small' },
-      { name: 'Winamp', setter: setWinampExpand, usestate: WinampExpand, color: 'rgba(105, 136, 145, 0.85)', size: 'small' },
-      { name: 'ResumeFile', setter: setResumeFileExpand, usestate: ResumeFileExpand, color: 'rgba(133, 165, 67, 0.85)', size: 'small' },
       { name: 'MineSweeper', setter: setMineSweeperExpand, usestate: MineSweeperExpand, color: 'rgba(187, 51, 48, 0.85)', size: 'small' },
       { name: 'MSN', setter: setMSNExpand, usestate: MSNExpand, color: 'rgba(52, 70, 143, 0.85)', size: 'small' },
       { name: 'Internet', setter: setOpenProjectExpand, usestate: openProjectExpand, color: 'rgba(0, 159, 186, 0.85)', size: 'small' },
@@ -1497,8 +1266,6 @@ function App() {
       { name: 'Paint', setter: setPaintExpand, usestate: PaintExpand, color: 'rgba(193, 178, 46, 0.85)', size: 'small' },
       { name: 'Utility', setter: setUtilityExpand, usestate: UtilityExpand, color: 'rgba(116, 85, 54, 0.85)', size: 'small' },
       { name: 'TaskManager', setter: setTaskManagerExpand, usestate: TaskManagerExpand, color: 'rgba(218, 160, 109, 0.85)', size: 'small' },
-      { name: 'Store', setter: setStoreExpand, usestate: StoreExpand, color: 'rgba(132, 140, 207, 0.85)', size: 'small' },
-      { name: 'Bitcoin', setter: setBtcShow, usestate: btcShow, color: 'rgba(132, 140, 207, 0.85)', size: 'small' },
       { name: 'Upload', setter: setUploadExpand, usestate: UploadExpand, color: 'rgba(31, 122, 206, 0.85)', size: 'small' },
 
       // Add user folders dynamically with individual state management
@@ -1616,35 +1383,7 @@ function App() {
 
         // Your existing special cases...
         if (lowerCaseName === 'mail') clippySendemailfunction();
-        if (lowerCaseName === 'winamp') clippySongFunction();
         if (lowerCaseName === 'msn') clippyUsernameFunction();
-        if (lowerCaseName === 'mail') clippySendemailfunction();
-        if (lowerCaseName === 'winamp') clippySongFunction();
-        if (lowerCaseName === 'msn') clippyUsernameFunction();
-        if (lowerCaseName === 'nft') {
-          handleDoubleClickiframe('Nft', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-          handleShow('Internet');
-        }
-        if (lowerCaseName === 'note') {
-          handleDoubleClickiframe('Note', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-          handleShow('Internet');
-        }
-        if (lowerCaseName === 'aiagent') {
-          handleDoubleClickiframe('AiAgent', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-          handleShow('Internet');
-        }
-        if (lowerCaseName === '3dobject') {
-          handleDoubleClickiframe('3dObject', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-          handleShow('Internet');
-        }
-        if (lowerCaseName === 'fortune') {
-          handleDoubleClickiframe('Fortune', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-          handleShow('Internet');
-        }
-        if (lowerCaseName === 'pixelpic') {
-          handleDoubleClickiframe('PixelPic', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-          handleShow('Internet');
-        }
         if (lowerCaseName === 'ie') {
           handleDoubleClickiframe('IE', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
           handleShow('Internet');
@@ -1659,12 +1398,11 @@ function App() {
       }
     });
 
-    PatchExpand ? null : setTileScreen(false);
 
     if (tap.includes(name)) return;
     setStartActive(false);
 
-    const notToOpenList = ['Run', 'Nft', 'Note', 'AiAgent', '3dObject', 'Fortune', 'Bitcoin', 'PixelPic', 'IE'];
+    const notToOpenList = ['Run', 'IE'];
     if (notToOpenList.includes(name)) return;
 
     setTap(prevTap => [...prevTap, name]);
@@ -1746,32 +1484,7 @@ function App() {
           if (lowerCaseName === 'upload') {
             // Upload specific logic if any, currently handled by generic setter
           }
-          if (lowerCaseName === 'winamp') clippySongFunction();
           if (lowerCaseName === 'msn') clippyUsernameFunction();
-          if (lowerCaseName === 'nft') {
-            handleDoubleClickiframe('Nft', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-            handleShow('Internet');
-          }
-          if (lowerCaseName === 'note') {
-            handleDoubleClickiframe('Note', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-            handleShow('Internet');
-          }
-          if (lowerCaseName === 'aiagent') {
-            handleDoubleClickiframe('AiAgent', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-            handleShow('Internet');
-          }
-          if (lowerCaseName === '3dobject') {
-            handleDoubleClickiframe('3dObject', setOpenProjectExpand, setProjectUrl)
-            handleShow('Internet');
-          }
-          if (lowerCaseName === 'fortune') {
-            handleDoubleClickiframe('Fortune', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-            handleShow('Internet');
-          }
-          if (lowerCaseName === 'pixelpic') {
-            handleDoubleClickiframe('PixelPic', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
-            handleShow('Internet');
-          }
           if (lowerCaseName === 'ie') {
             handleDoubleClickiframe('IE', setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe)
             handleShow('Internet');
@@ -1783,12 +1496,11 @@ function App() {
           item.setter(prev => ({ ...prev, focusItem: false }));
         }
       });
-      PatchExpand ? null : setTileScreen(false)
 
       if (tap.includes(name)) return;
       setStartActive(false)
 
-      const notToOpenList = ['Run', 'Nft', 'Note', 'AiAgent', '3dObject', 'Fortune', 'Bitcoin', 'PixelPic', 'IE'];
+      const notToOpenList = ['Run', 'IE'];
       if (notToOpenList.includes(name)) return;
 
       setTap(prevTap => [...prevTap, name]);
@@ -1829,10 +1541,6 @@ function App() {
 
   function clippySendemailfunction() {
     handleClippyFunction(setClippySendemail, ClearTOclippySendemailfunction, allSetters);
-  }
-
-  function clippySongFunction() {
-    handleClippyFunction(setClippySong, ClearTOSongfunction, allSetters);
   }
 
   function clippyUsernameFunction() {

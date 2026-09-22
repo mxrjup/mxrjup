@@ -28,7 +28,6 @@ function OpenProject() {
     setProjectUrl,
     openProjectExpand, setOpenProjectExpand,
     lastTapTime, setLastTapTime,
-    StyleHide,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,
@@ -93,27 +92,6 @@ function OpenProject() {
 
   function handleFetchLinkDes(projectName) {
     switch (projectName) {
-      case 'Nft':
-        return 'https://opennft.netlify.app/'
-
-      case 'Note':
-        return 'https://fullstack-stickynotes.netlify.app/'
-
-
-      case 'AiAgent':
-        return 'https://yuteoctober.github.io/AI_chatbot/';
-
-      case '3dObject':
-        return 'https://yuteoctober.github.io/3d_book/';
-
-
-      case 'Fortune':
-        return 'https://yuteoctober.github.io/week_fortune/';
-
-
-      case 'PixelPic':
-        return 'https://yuteoctober.github.io/Pixel_pic/';
-
       case 'IE':
         return 'https://www.google.com/search?igu=1';
 
@@ -157,13 +135,11 @@ function OpenProject() {
               <div onClick={!isTouchDevice ? (e) => {
                 e.stopPropagation()
                 setOpenProjectExpand(prev => ({ ...prev, hide: true, focusItem: false }))
-                StyleHide('Internet')
               } : undefined
               }
                 onTouchEnd={(e) => {
                   e.stopPropagation()
                   setOpenProjectExpand(prev => ({ ...prev, hide: true, focusItem: false }))
-                  StyleHide('Internet')
                 }}
                 onTouchStart={(e) => e.stopPropagation()}
               >

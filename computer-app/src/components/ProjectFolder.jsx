@@ -33,7 +33,6 @@ function ProjectFolder() {
     setProjectExpand,
     lastTapTime,
     setLastTapTime,
-    StyleHide,
     isTouchDevice,
     handleShow,
     handleShowMobile,
@@ -119,12 +118,10 @@ function ProjectFolder() {
               onClick={!isTouchDevice ? (e) => {
                 e.stopPropagation();
                 setProjectExpand((prev) => ({ ...prev, hide: true, focusItem: false }));
-                StyleHide('Project');
               } : undefined}
               onTouchEnd={(e) => {
                 e.stopPropagation();
                 setProjectExpand((prev) => ({ ...prev, hide: true, focusItem: false }));
-                StyleHide('Project');
               }}
               onTouchStart={(e) => e.stopPropagation()}
             >

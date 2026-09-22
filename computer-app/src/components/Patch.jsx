@@ -13,7 +13,6 @@ function Patch() {
   const { 
     themeDragBar,
     PatchExpand, setPatchExpand,
-    StyleHide,
     isTouchDevice,
     handleSetFocusItemTrue,
     inlineStyleExpand,
@@ -74,13 +73,11 @@ function Patch() {
               <div onClick={ !isTouchDevice? (e) => {
                 e.stopPropagation()
                 setPatchExpand(prev => ({...prev, hide: true, focusItem: false}))
-                StyleHide('Patch') 
               } : undefined
             }
                    onTouchEnd={(e) => {
                     e.stopPropagation()
                     setPatchExpand(prev => ({...prev, hide: true, focusItem: false}))
-                    StyleHide('Patch')
                   }}
                   onTouchStart={(e) => e.stopPropagation()}
               >
