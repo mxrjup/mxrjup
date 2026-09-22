@@ -393,6 +393,12 @@ li {
             content: counter(rest) '. ';
             color: var(--secondary);
         }
+
+        /* "72 weeks" stays on one line; the name gives way instead. */
+        span:last-child {
+            flex: none;
+            white-space: nowrap;
+        }
     }
 }
 

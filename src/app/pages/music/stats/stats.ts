@@ -59,7 +59,7 @@ export interface ListeningStats {
     longestStreak: { from: string; to: string; days: number }[];
     mostPlayedInAWeek: RecordHolder[];
     deepestCatalogue: RecordHolder[];
-    albumInADay: RecordHolder[];
+    weeksInRotation: RecordHolder[];
     onRepeat: RecordHolder[];
   };
 }
@@ -171,13 +171,11 @@ export class StatsComponent implements OnInit, OnDestroy {
       topTenRun('tracks', 'Longest run in the top 10 · Track', false),
       topTenRun('albums', 'Longest run in the top 10 · Album', false),
       {
-        label: 'Most of an album in one day',
+        label: 'Most weeks in rotation · Album',
         round: false,
-        holders: r.albumInADay.map((h) => ({
-          name: h.name,
-          detail: [h.artist, this.day(h.day)].filter(Boolean).join(' · '),
-          picture: h.cover,
-          value: h.tracks ?? 0, unit: unit(h.tracks ?? 0, 'track')
+        holders: r.weeksInRotation.map((h) => ({
+          name: h.name, detail: h.artist, picture: h.cover,
+          value: h.weeks ?? 0, unit: unit(h.weeks ?? 0, 'week')
         }))
       },
       {
