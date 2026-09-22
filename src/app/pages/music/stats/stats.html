@@ -1,0 +1,202 @@
+<div class="container">
+    <header class="header">
+        <a routerLink="/music" class="back-link">&larr; MUSIC</a>
+        <div class="title">STATS</div>
+    </header>
+
+    @if (range(); as r) {
+    <div class="intro">
+        <h1 class="large-title">Listening</h1>
+        <p class="caption">{{ period(r.from, r.to) }}</p>
+    </div>
+
+    @if (ranges().length > 1) {
+    <div class="segmented" role="group" aria-label="Period">
+        @for (option of ranges(); track option.id) {
+        <button type="button" [class.active]="option.id === r.id" [attr.aria-pressed]="option.id === r.id"
+            (click)="select(option.id)">{{ option.label }}</button>
+        }
+    </div>
+    }
+
+    <section class="card summary">
+        <span class="summary-label">Plays</span>
+        <span class="summary-value">{{ count(r.plays) }}</span>
+        @if (delta(); as d) {
+        <span class="summary-delta" [class]="d.cls">{{ d.text }}</span>
+        }
+    </section>
+
+    @if (r.artists.length) {
+    <section class="section">
+        <div class="section-head">
+            <h2>Top Artists</h2>
+            @if (r.artists.length > 10) {
+            <button type="button" class="see-all" (click)="toggle('artists')">{{ expanded()['artists'] ? 'Show Less' : 'See All' }}</button>
+            }
+        </div>
+
+        @let top = r.artists[0];
+        <div class="card hero">
+            @if (top.image) {
+            <img class="hero-art round" [src]="top.image" alt="">
+            } @else {
+            <div class="hero-art round art-fallback">{{ initial(top.name) }}</div>
+            }
+            <div class="hero-text">
+                <span class="hero-tag">#1 Artist</span>
+                <span class="hero-name">{{ top.name }}</span>
+                <span class="secondary">{{ plays(top.plays) }}</span>
+                @if (movement(top); as m) {
+                <span class="move" [class]="m.cls" [attr.aria-label]="m.label">{{ m.text }}</span>
+                }
+            </div>
+        </div>
+
+        @if (r.artists.length > 1) {
+        <ol class="artist-grid">
+            @for (artist of shown(r.artists, 'artists', 1); track artist.rank) {
+            <li>
+                @if (artist.image) {
+                <img class="round" [src]="artist.image" alt="" loading="lazy">
+                } @else {
+                <div class="round art-fallback">{{ initial(artist.name) }}</div>
+                }
+                <span class="tile-name"><span class="rank">{{ artist.rank }}</span> {{ artist.name }}</span>
+                <span class="tile-meta">
+                    {{ plays(artist.plays) }}
+                    @if (movement(artist); as m) {
+                    <span class="move" [class]="m.cls" [attr.aria-label]="m.label">{{ m.text }}</span>
+                    }
+                </span>
+            </li>
+            }
+        </ol>
+        }
+    </section>
+    }
+
+    @if (r.tracks.length) {
+    <section class="section">
+        <div class="section-head">
+            <h2>Top Tracks</h2>
+            @if (r.tracks.length > 10) {
+            <button type="button" class="see-all" (click)="toggle('tracks')">{{ expanded()['tracks'] ? 'Show Less' : 'See All' }}</button>
+            }
+        </div>
+        <ol class="card list">
+            @for (track of shown(r.tracks, 'tracks'); track track.rank) {
+            <li class="row">
+                <span class="rank">{{ track.rank }}</span>
+                @if (track.cover) {
+                <img class="thumb" [src]="track.cover" alt="" loading="lazy">
+                } @else {
+                <div class="thumb art-fallback">{{ initial(track.name) }}</div>
+                }
+                <span class="row-text">
+                    <span class="row-title">{{ track.name }}</span>
+                    <span class="row-sub">{{ track.artist }}</span>
+                </span>
+                <span class="row-end">
+                    <span class="secondary">{{ plays(track.plays) }}</span>
+                    @if (movement(track); as m) {
+                    <span class="move" [class]="m.cls" [attr.aria-label]="m.label">{{ m.text }}</span>
+                    }
+                </span>
+            </li>
+            }
+        </ol>
+    </section>
+    }
+
+    @if (r.albums.length) {
+    <section class="section">
+        <div class="section-head">
+            <h2>Top Albums</h2>
+            @if (r.albums.length > 10) {
+            <button type="button" class="see-all" (click)="toggle('albums')">{{ expanded()['albums'] ? 'Show Less' : 'See All' }}</button>
+            }
+        </div>
+        <ol class="album-grid">
+            @for (album of shown(r.albums, 'albums'); track album.rank) {
+            <li>
+                @if (album.cover) {
+                <img class="cover" [src]="album.cover" alt="" loading="lazy">
+                } @else {
+                <div class="cover art-fallback">{{ initial(album.name) }}</div>
+                }
+                <span class="tile-name"><span class="rank">{{ album.rank }}</span> {{ album.name }}</span>
+                <span class="tile-meta">{{ album.artist }}</span>
+                <span class="tile-meta">
+                    {{ plays(album.plays) }}
+                    @if (movement(album); as m) {
+                    <span class="move" [class]="m.cls" [attr.aria-label]="m.label">{{ m.text }}</span>
+                    }
+                </span>
+            </li>
+            }
+        </ol>
+    </section>
+    }
+
+    @if (r.genres.length) {
+    <section class="section">
+        <div class="section-head">
+            <h2>Top Genres</h2>
+            @if (r.genres.length > 10) {
+            <button type="button" class="see-all" (click)="toggle('genres')">{{ expanded()['genres'] ? 'Show Less' : 'See All' }}</button>
+            }
+        </div>
+        <ol class="card list">
+            @for (genre of shown(r.genres, 'genres'); track genre.name) {
+            <li class="row genre">
+                <span class="rank">{{ genre.rank }}</span>
+                <span class="genre-name">{{ titleCase(genre.name) }}</span>
+                <span class="bar"><span [style.width.%]="(genre.share / r.genres[0].share) * 100"></span></span>
+                <span class="secondary">{{ percent(genre.share) }}</span>
+            </li>
+            }
+        </ol>
+    </section>
+    }
+
+    @if (recordCards().length) {
+    <section class="section">
+        <div class="section-head">
+            <h2>Records</h2>
+        </div>
+        <div class="records">
+            @for (card of recordCards(); track card.label) {
+            @let lead = card.holders[0];
+            <article class="card record">
+                <span class="record-label">{{ card.label }}</span>
+                <div class="record-lead">
+                    @if (lead.picture) {
+                    <img class="thumb" [class.round]="card.round" [src]="lead.picture" alt="" loading="lazy">
+                    }
+                    <span class="row-text">
+                        <span class="record-value">{{ count(lead.value) }} <small>{{ lead.unit }}</small></span>
+                        <span class="row-title">{{ lead.name }}</span>
+                        @if (lead.detail) {
+                        <span class="row-sub">{{ lead.detail }}</span>
+                        }
+                    </span>
+                </div>
+                @if (card.holders.length > 1) {
+                <ol class="record-rest" start="2">
+                    @for (holder of card.holders.slice(1); track $index) {
+                    <li><span>{{ holder.name }}</span><span class="secondary">{{ count(holder.value) }} {{ holder.unit }}</span></li>
+                    }
+                </ol>
+                }
+            </article>
+            }
+        </div>
+    </section>
+    }
+
+    <p class="updated">Updated {{ updated() }}</p>
+    } @else if (loaded()) {
+    <div class="empty-state">NO STATS YET.</div>
+    }
+</div>

@@ -170,6 +170,16 @@ test('the timeline is timeline.json alone, without its hidden entries', async ()
     ]);
 });
 
+test('the stats are one document, served whole, and empty until published', async () => {
+    const file = path.join(content, 'data', 'stats.json');
+    assert.deepEqual(await getJson('/api/data/stats'), {});
+
+    const stats = { through: '2026-09-20', ranges: [{ id: '4w', plays: 3 }], records: {} };
+    await fs.writeFile(file, JSON.stringify(stats));
+    assert.deepEqual(await getJson('/api/data/stats'), stats);
+    await fs.rm(file);
+});
+
 test('an empty VISITORS_DIR is initialised', async () => {
     assert.deepEqual((await fs.readdir(visitors)).sort(), ['data', 'uploads']);
     assert.deepEqual((await getJson('/api/computer/files')).files, []);

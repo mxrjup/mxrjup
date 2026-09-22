@@ -137,7 +137,7 @@ app.use('/uploads', express.static(CONTENT_UPLOADS_DIR, {
 // Generic Data Endpoints
 // Read-only: content is written by Sveltia CMS (/admin), which commits straight
 // to the content repository. Its checkout on this host is CONTENT_DIR.
-const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits'];
+const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits', 'stats'];
 
 /**
  * Read one content file as a plain array.
@@ -156,6 +156,17 @@ async function readItems(filePath) {
     }
 }
 
+/** Read a content file that is one JSON object; a missing file reads as {}. */
+async function readDocument(filePath) {
+    try {
+        const parsed = JSON.parse(await fs.readFile(filePath, 'utf8'));
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (err) {
+        if (err.code === 'ENOENT') return {};
+        throw err;
+    }
+}
+
 // Get all data for a type
 app.get('/api/data/:type', async (req, res) => {
     const { type } = req.params;
@@ -164,6 +175,13 @@ app.get('/api/data/:type', async (req, res) => {
     }
 
     try {
+        // One document rather than a list: the listening stats the private
+        // mxrjup-listening repository publishes every Monday. Served whole; a host
+        // without it yet answers an empty object.
+        if (type === 'stats') {
+            res.setHeader('Cache-Control', REVALIDATE);
+            return res.json(await readDocument(path.join(CONTENT_DATA_DIR, 'stats.json')));
+        }
         let items = await readItems(path.join(CONTENT_DATA_DIR, `${type}.json`));
         // A hidden album stays in timeline.json so the weekly Spotify sync of the
         // content repository does not add it back; it is only kept off the site.

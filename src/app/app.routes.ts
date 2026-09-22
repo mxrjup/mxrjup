@@ -4,6 +4,7 @@ import { HomeComponent } from './pages/home/home';
 import { MediaComponent } from './pages/media/media';
 import { MusicComponent } from './pages/music/music';
 import { TimelineComponent } from './pages/music/timeline/timeline';
+import { StatsComponent } from './pages/music/stats/stats';
 
 import { ReviewDetailComponent } from './pages/music/review-detail/review-detail';
 import { CoolStuffComponent } from './pages/cool-stuff/cool-stuff';
@@ -21,6 +22,7 @@ export const routes: Routes = [
     { path: '', component: HomeComponent },
     { path: 'media', component: MediaComponent },
     { path: 'music', component: MusicComponent },
+    { path: 'music/stats', component: StatsComponent },
     { path: 'music/timeline', component: TimelineComponent },
     { path: 'music/review/:id', component: ReviewDetailComponent },
     { path: 'cool-stuff', component: CoolStuffComponent },
