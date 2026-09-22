@@ -55,7 +55,6 @@ function BgSetting() {
   const [ selectedBg2Effect, setSelectedBg2Effect ] = useState(null)
 
   const { 
-    setTileBG,
     themeDragBar, setThemeDragBar,
     BgSettingExpand ,setBgSettingExpand,
     StyleHide,
@@ -159,7 +158,6 @@ function BgSetting() {
         if (localBg) { // for background
           bodyBG.style.backgroundColor = localtheme
           bodyBG.style.backgroundImage = `url(${localBg})`;
-          setTileBG(localtheme)
         }
       },[])
 
@@ -228,7 +226,6 @@ function BgSetting() {
           localStorage.setItem('barcolor', barcolor); // set barcolor in localstroage
           setLocalBg(ImgBgPreview)
           setLocalTheme(themeColor)
-          setTileBG(themeColor)
         } 
         return;
       }

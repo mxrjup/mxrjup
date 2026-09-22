@@ -35,7 +35,7 @@ function Run() {
     setSelectedFolder,
    } = useContext(UseContext);
 
-  const cannotOpenFile = ['internet', 'type', 'run', 'hard disk (c:)', 'hard disk (d:)', 'cd-rom' ]; // files that should not be opened by RUN
+  const cannotOpenFile = ['internet', 'run', 'hard disk (c:)', 'hard disk (d:)', 'cd-rom' ]; // files that should not be opened by RUN
 
     function handleRunOpenFile(ObjectState, name) {
       const lowerCaseName = name.toLowerCase().trim();
@@ -63,25 +63,10 @@ function Run() {
         return;
       }
 
-      switch (lowerCaseName) {
-        
-
-        case 'resume': // Resume File
-          setTimeout(() => {
-            handleShow('ResumeFile');
-            closeRun();
-          }, 100);
-          break;
-
-
-        default:
-          setTimeout(() => {
-            const passedName = matchedItem ? matchedItem.name : name;
-            handleShow(passedName);
-            closeRun();
-          }, 100);
-          break;
-      }
+      setTimeout(() => {
+        handleShow(matchedItem.name);
+        closeRun();
+      }, 100);
     }
 
     // Generate allowed desktop items in run's list
@@ -90,7 +75,6 @@ function Run() {
         const lowerCaseName = item.name.toLowerCase();
         return (
           !cannotOpenFile.includes(lowerCaseName) &&
-          lowerCaseName !== 'resumefile' &&
           !lowerCaseName.startsWith('0')
         );
       })

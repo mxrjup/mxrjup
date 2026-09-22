@@ -11,7 +11,6 @@ function TaskManager() {
   const [selectedItemToClose, setSelectedItemToClose] = useState('');
 
     const { 
-    btcShow,
     setShutdownWindow,
     TaskManagerExpand, setTaskManagerExpand,
     themeDragBar,
