@@ -137,7 +137,7 @@ app.use('/uploads', express.static(CONTENT_UPLOADS_DIR, {
 // Generic Data Endpoints
 // Read-only: content is written by Sveltia CMS (/admin), which commits straight
 // to the content repository. Its checkout on this host is CONTENT_DIR.
-const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits', 'stats'];
+const allowedFiles = ['timeline', 'reviews', 'media', 'cool_stuff', 'credits', 'wip', 'stats'];
 
 /**
  * Read one content file as a plain array.
