@@ -9,7 +9,7 @@ const crypto = require('crypto');
  *
  *   <root>/uploads/                  the uploaded files, served at /uploads/users/
  *   <root>/data/computer_files.json  the desktop: folders and file metadata
- *   <root>/data/chat_data.json       rooms and the last messages of each
+ *   <root>/data/chat_data.json       the last chat messages
  *
  * Every write goes through this module for two reasons:
  *   - it is atomic (temporary file in the same directory, then rename), so the backup,
@@ -24,17 +24,9 @@ const COMPUTER_FILES = 'computer_files.json';
 const CHAT_DATA = 'chat_data.json';
 const MAX_MESSAGES_PER_ROOM = 50;
 
-const DEFAULT_COMPUTER_FILES = { files: [], folders: ['My Documents', 'My Pictures', 'My Music'] };
+const DEFAULT_COMPUTER_FILES = { files: [] };
 
-const DEFAULT_CHAT_DATA = {
-    rooms: [
-        { id: 'general', name: 'General Chat', description: 'Talk about anything and everything.' },
-        { id: 'tech', name: 'Tech & Computers', description: 'Discuss hardware, software, and the future.' },
-        { id: 'music', name: 'Music Lounge', description: 'Share your favorite tunes.' },
-        { id: 'gaming', name: 'Gamers Zone', description: 'Video games, tips, and tricks.' }
-    ],
-    messages: { general: [], tech: [], music: [], gaming: [] }
-};
+const DEFAULT_CHAT_DATA = { messages: { general: [] } };
 
 const serialize = (data) => JSON.stringify(data, null, 2);
 
@@ -124,8 +116,8 @@ function createVisitorStore(root) {
     }
 
     /**
-     * The one way a chat message gets saved, shared by the REST route and the
-     * WebSocket so both keep the same shape and the same cap.
+     * The one way a chat message gets saved, so every message keeps the same shape
+     * and the same cap.
      */
     function addChatMessage(room, user, text) {
         return update(CHAT_DATA, (data) => {

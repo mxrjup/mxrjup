@@ -77,6 +77,27 @@ const postJson = (url, body, ip) => fetch(base + url, {
     body: JSON.stringify(body)
 });
 
+// Resolves once the history message has arrived: the connection is then fully set up.
+function openSocket() {
+    return new Promise((resolve, reject) => {
+        const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
+        ws.once('message', () => resolve(ws));
+        ws.once('error', reject);
+    });
+}
+
+// The saved chat, as a new connection receives it.
+function chatHistory() {
+    return new Promise((resolve, reject) => {
+        const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
+        ws.once('message', (raw) => {
+            ws.close();
+            resolve(JSON.parse(raw).data);
+        });
+        ws.once('error', reject);
+    });
+}
+
 // The server trusts one proxy hop (TRUST_PROXY defaults to 1), so X-Forwarded-For is
 // the visitor's address as the rate limits see it. Tests that would otherwise share
 // a budget each come from their own address.
@@ -152,8 +173,7 @@ test('the timeline is timeline.json alone, without its hidden entries', async ()
 test('an empty VISITORS_DIR is initialised', async () => {
     assert.deepEqual((await fs.readdir(visitors)).sort(), ['data', 'uploads']);
     assert.deepEqual((await getJson('/api/computer/files')).files, []);
-    const rooms = await getJson('/api/chat/rooms');
-    assert.ok(rooms.some((r) => r.id === 'general'));
+    assert.deepEqual(await chatHistory(), []);
     assert.equal((await getJson('/api/computer/quota')).used, 0);
 });
 
@@ -261,14 +281,8 @@ test('published content is revalidated, never served stale from cache', async ()
     await fs.writeFile(credits, JSON.stringify({ items: [] }));
 });
 
-test('20 chat messages sent at once over REST and WebSocket are all kept', async () => {
-    const wsUrl = base.replace('http', 'ws') + '/ws';
-    const sockets = await Promise.all(Array.from({ length: 10 }, () => new Promise((resolve, reject) => {
-        const ws = new WebSocket(wsUrl);
-        // Wait for the history message: the connection is then fully set up.
-        ws.once('message', () => resolve(ws));
-        ws.once('error', reject);
-    })));
+test('20 chat messages sent at once over WebSocket are all kept', async () => {
+    const sockets = await Promise.all(Array.from({ length: 10 }, openSocket));
 
     // Each socket sees every broadcast; the last one tells us all were saved.
     const broadcasts = [];
@@ -276,39 +290,40 @@ test('20 chat messages sent at once over REST and WebSocket are all kept', async
         sockets[0].on('message', (raw) => {
             const msg = JSON.parse(raw);
             if (msg.type === 'message') broadcasts.push(msg.data);
-            if (broadcasts.length === 10) resolve();
+            if (broadcasts.length === 20) resolve();
         });
     });
 
     const texts = Array.from({ length: 20 }, (_, i) => `parallel-${i}`);
-    const rest = [];
     texts.forEach((text, i) => {
-        if (i % 2) {
-            sockets[i >> 1].send(JSON.stringify({ type: 'message', user: `ws${i}`, text }));
-        } else {
-            const message = { user: `rest${i}`, text };
-            rest.push(postJson('/api/chat/general/messages', message, freshIp()));
-        }
+        sockets[i >> 1].send(JSON.stringify({ type: 'message', user: `ws${i}`, text }));
     });
-    const restReplies = await Promise.all(rest);
-    assert.ok(restReplies.every((r) => r.status === 200));
     await allBroadcast;
     sockets.forEach((ws) => ws.close());
 
-    const saved = await getJson('/api/chat/general/messages');
+    const saved = await chatHistory();
     assert.ok(saved.length <= 50);
     assert.deepEqual(saved.map((m) => m.text).filter((t) => t.startsWith('parallel-')).sort(),
         [...texts].sort());
     assert.equal(new Set(saved.map((m) => m.id)).size, saved.length, 'ids are unique');
 });
 
-test('the chat keeps only the last 50 messages of a room', async () => {
-    // From 60 addresses: one would hit the rate limit after 20.
-    const replies = await Promise.all(Array.from({ length: 60 }, (_, i) =>
-        postJson('/api/chat/music/messages', { user: 'u', text: `n${i}` }, freshIp())
-    ));
-    assert.ok(replies.every((r) => r.status === 200));
-    const saved = await getJson('/api/chat/music/messages');
+test('the chat keeps only the last 50 messages', async () => {
+    // From 3 connections: one would run out of its budget after 20.
+    const sockets = await Promise.all(Array.from({ length: 3 }, openSocket));
+    let seen = 0;
+    const allBroadcast = new Promise((resolve) => {
+        sockets[0].on('message', (raw) => {
+            if (JSON.parse(raw).type === 'message' && ++seen === 60) resolve();
+        });
+    });
+    for (let i = 0; i < 60; i++) {
+        sockets[i % 3].send(JSON.stringify({ type: 'message', user: 'u', text: `n${i}` }));
+    }
+    await allBroadcast;
+    sockets.forEach((ws) => ws.close());
+
+    const saved = await chatHistory();
     assert.equal(saved.length, 50);
     assert.equal(new Set(saved.map((m) => m.text)).size, 50);
 });
@@ -459,18 +474,6 @@ test('uploads are limited to 10 per 15 minutes per address', async () => {
     assert.equal((await upload('not media', 'x.txt')).status, 415);
 });
 
-test('chat posts are limited to 20 per minute per address', async () => {
-    const ip = freshIp();
-    const statuses = [];
-    for (let i = 0; i < 21; i++) {
-        const res = await postJson('/api/chat/tech/messages', { user: 'u', text: `r${i}` }, ip);
-        statuses.push(res.status);
-    }
-    assert.deepEqual(statuses, [...Array(20).fill(200), 429]);
-    const limited = await postJson('/api/chat/tech/messages', { user: 'u', text: 'x' }, ip);
-    assert.match((await limited.json()).error, /Too many requests/);
-});
-
 test('deleting, moving and creating folders share 30 per 15 minutes', async () => {
     const ip = freshIp();
     const headers = { 'Content-Type': 'application/json', ...forwardedFor(ip) };
@@ -488,20 +491,6 @@ test('deleting, moving and creating folders share 30 per 15 minutes', async () =
     assert.equal(res.status, 429);
 });
 
-test('chat text and user name are capped', async () => {
-    const post = (user, text) => postJson('/api/chat/gaming/messages', { user, text }, freshIp());
-    assert.equal((await post('u', 't'.repeat(501))).status, 400);
-    assert.equal((await post('u'.repeat(31), 'hi')).status, 400);
-    assert.equal((await post('u'.repeat(30), 't'.repeat(500))).status, 200);
-});
-
-function openSocket() {
-    return new Promise((resolve, reject) => {
-        const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
-        ws.once('message', () => resolve(ws));
-        ws.once('error', reject);
-    });
-}
 
 test('a WebSocket connection is limited in pace and message size', async () => {
     const ws = await openSocket();
@@ -534,6 +523,12 @@ test('a WebSocket connection is limited in pace and message size', async () => {
     });
     third.send(JSON.stringify({ type: 'message', user: 'w', text: 'y'.repeat(501) }));
     assert.deepEqual(await reply, { type: 'error', error: 'Message is limited to 500 characters' });
+    const nameReply = new Promise((resolve) => {
+        third.once('message', (raw) => resolve(JSON.parse(raw)));
+    });
+    third.send(JSON.stringify({ type: 'message', user: 'u'.repeat(31), text: 'hi' }));
+    assert.deepEqual(await nameReply,
+        { type: 'error', error: 'User name is limited to 30 characters' });
     ws.close();
     third.close();
 });

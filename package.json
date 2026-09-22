@@ -11,8 +11,7 @@
     "build:computer": "cd computer-app && npm run build",
     "build": "npm run build:angular && npm run build:computer",
     "postinstall": "cd server && npm ci && cd ../computer-app && npm ci",
-    "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "watch": "ng build --watch --configuration development"
   },
   "prettier": {
     "printWidth": 100,
@@ -32,7 +31,6 @@
     "@angular/common": "^21.1.0",
     "@angular/compiler": "^21.1.0",
     "@angular/core": "^21.1.0",
-    "@angular/forms": "^21.1.0",
     "@angular/platform-browser": "^21.1.0",
     "@angular/router": "^21.1.0",
     "@types/three": "^0.182.0",
@@ -45,8 +43,6 @@
     "@angular/cli": "^21.1.2",
     "@angular/compiler-cli": "^21.1.0",
     "concurrently": "^9.2.1",
-    "jsdom": "^27.1.0",
-    "typescript": "~5.9.2",
-    "vitest": "^4.0.8"
+    "typescript": "~5.9.2"
   }
 }

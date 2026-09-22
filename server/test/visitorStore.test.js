@@ -22,7 +22,7 @@ test('init creates the layout and default files in an empty directory', async ()
     const files = await store.readComputerFiles();
     assert.deepEqual(files.files, []);
     const chat = await store.readChat();
-    assert.deepEqual(chat.rooms.map((r) => r.id), ['general', 'tech', 'music', 'gaming']);
+    assert.deepEqual(chat.messages, { general: [] });
 });
 
 test('init leaves existing files alone', async () => {

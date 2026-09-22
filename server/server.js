@@ -491,48 +491,6 @@ app.delete('/api/computer/folder/:name', limits.desktop, async (req, res) => {
 });
 
 // ============================================
-// MSN CHAT API
-// ============================================
-
-// GET /api/chat/rooms
-app.get('/api/chat/rooms', async (req, res) => {
-    try {
-        const data = await store.readChat();
-        res.json(data.rooms);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch rooms' });
-    }
-});
-
-// GET /api/chat/:room/messages
-app.get('/api/chat/:room/messages', async (req, res) => {
-    try {
-        const { room } = req.params;
-        const data = await store.readChat();
-        res.json(data.messages[room] || []);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch messages' });
-    }
-});
-
-// POST /api/chat/:room/messages
-app.post('/api/chat/:room/messages', limits.chat, async (req, res) => {
-    try {
-        const { room } = req.params;
-        const { user, text } = req.body;
-
-        const invalid = chatMessageError(user, text);
-        if (invalid) return res.status(400).json({ error: invalid });
-
-        res.json(await store.addChatMessage(room, user, text));
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to post message' });
-    }
-});
-
-
-// ============================================
 // STATIC FRONTENDS
 // ============================================
 // Managed hosting runs a single Node process with no nginx in front of it, so
@@ -572,19 +530,11 @@ app.get('*', (req, res, next) => {
 const WebSocket = require('ws');
 
 function startWebSocket(server) {
-    // Explicitly define path to match Nginx location
     // A larger frame than a chat message closes the connection (ws's default would
     // accept 100 MB).
     const wss = new WebSocket.Server({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD });
 
-    // Debug: Log all upgrade requests to see if they reach the server
-    server.on('upgrade', (request, socket, head) => {
-        console.log(`[DEBUG] HTTP Upgrade request received for: ${request.url}`);
-    });
-
-    wss.on('connection', async (ws, req) => {
-        console.log(`[DEBUG] WebSocket Client connected from ${req.socket.remoteAddress}`);
-
+    wss.on('connection', async (ws) => {
         // Send full chat history on connection
         try {
             const data = await store.readChat();
@@ -593,7 +543,8 @@ function startWebSocket(server) {
             console.error('Error sending history:', e);
         }
 
-        // The HTTP rate limits end at the upgrade, so each connection has its own.
+        // The HTTP rate limiters never see WebSocket messages, so each connection has
+        // its own budget.
         // A refusal is a message the client ignores; closing would only make it
         // reconnect.
         const budget = createMessageBudget();
@@ -625,11 +576,7 @@ function startWebSocket(server) {
         });
 
         ws.on('error', (error) => {
-            console.error('[DEBUG] WebSocket client error:', error);
-        });
-
-        ws.on('close', () => {
-            console.log('[DEBUG] Client disconnected');
+            console.error('WebSocket client error:', error);
         });
     });
 }

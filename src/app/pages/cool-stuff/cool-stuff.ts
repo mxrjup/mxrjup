@@ -19,8 +19,6 @@ interface CoolThing {
   subtitle?: string;
   image: string;
   link?: string;
-  colSpan?: number;
-  rowSpan?: number;
   tagColor?: string; // hex
 }
 
