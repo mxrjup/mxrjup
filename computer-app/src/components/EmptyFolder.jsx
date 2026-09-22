@@ -329,7 +329,6 @@ function EmptyFolder({ state, setState, refState, folderName, photoMode, paintMo
                             // Find other folders in THIS current folder
                             const currentFolderIcons = desktopIcon.filter(i => i.folderId === folderName && (i.type === 'folder' || i.type === 'ReCycleBin') && i.name !== icon.name);
 
-                            let foundCollision = false;
                             for (const folder of currentFolderIcons) {
                               const folderRef = iconRefs.current[folder.name];
                               if (folderRef) {
@@ -343,7 +342,6 @@ function EmptyFolder({ state, setState, refState, folderName, photoMode, paintMo
                                   iconRect.bottom > folderRect.top
                                 ) {
                                   setDropTargetFolder(folder.name); // Using name as ID
-                                  foundCollision = true;
                                   break;
                                 }
                               }

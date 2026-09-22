@@ -1,11 +1,10 @@
 import ErrorBtn from './ErrorBtn';
 import UseContext from '../Context'
-import { useContext, useState, useEffect } from "react";
+import { useContext, useEffect } from "react";
 import Draggable from 'react-draggable'
 import RunIcon from '../assets/run.png'
 import '../css/Run.css'
 import { BsCaretDownFill } from "react-icons/bs";
-import {imageMapping} from './function/AppFunctions' 
 
 
 
@@ -31,8 +30,6 @@ function Run() {
     deleteTap,
     setRegErrorPopUp,
     setRegErrorPopUpVal,
-    setCurrentFolder,
-    setSelectedFolder,
    } = useContext(UseContext);
 
   const cannotOpenFile = ['internet', 'run', 'hard disk (c:)', 'hard disk (d:)', 'cd-rom' ]; // files that should not be opened by RUN

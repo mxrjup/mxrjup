@@ -31,11 +31,7 @@ export const clippyPhrase = {
 
 export const clippySuggest = 
 [
-    'Click => Send when you finished writing the email.',
-    'Thank you for your interest.',
-    "Let's play my favorite song.",
     'Click the icon button on the top to change your username.',
-    'Server is currently down, will put it back up asap!',
     'Nobody is online, let call my BOT.'
 
 ]

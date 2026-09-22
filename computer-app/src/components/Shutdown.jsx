@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext } from 'react';
 import UseContext from '../Context';
 import pcshutdown from '../assets/shutdown.png';
 import '../css/Shutdown.css';
@@ -49,16 +49,6 @@ function Shutdown() {
         setSelectedOption(null)
     }
 
-    // useEffect(() => { // change body bg darker tone, when shutdown is toggled
-    //     const bodyElement = document.body;
-    
-    //     if (shutdownWindow) {
-    //         bodyElement.style.background = '#09807e';
-    //     } else {
-    //         bodyElement.style.background = '';
-    //     }
-    
-    // }, [shutdownWindow]);
     
 
     return (

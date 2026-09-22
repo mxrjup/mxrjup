@@ -18,7 +18,7 @@ function RightClickWindows() {
     regErrorPopUpVal,
     setRegErrorPopUpVal, setRegErrorPopUp,
     currentRightClickFolder,
-    UserCreatedFolder, setUserCreatedFolder,
+    setUserCreatedFolder,
     ObjectState,
     deleteIcon, setDeleteIcon,
     setKey,
@@ -45,18 +45,9 @@ function RightClickWindows() {
   function refreshed() {
     setRightClickDefault(false);
     setRefresh(prev => prev + 1);
-    // setSortIconTrigger(prev => prev + 1)
   }
 
 
-  // useEffect(() =>{
-  //   if(sortIconTrigger > 0){
-  //     const updatedSortedIcon = sortedIcon.length > 1 ? sortedIcon : desktopIcon
-  //     setDesktopIcon(updatedSortedIcon)
-  //     setRefresh(prev => prev + 1);
-  //   }
-
-  // },[sortIconTrigger])
 
 
   function handleSwitchOpenFolder() { // decide which folder function to call
@@ -138,12 +129,6 @@ function RightClickWindows() {
         localStorage.setItem('icons', JSON.stringify(newDesktopIcons));
         return newDesktopIcons;
       });
-      // if(!binRestoreArr) return;
-      // setBinRestoreArr(prev => {
-      //   const newBinArr = prev.filter(icon => icon.name !== droppedIcon.name);
-      //   localStorage.setItem('restoreArray', JSON.stringify(newBinArr)); // Update localStorage
-      //   return newBinArr;
-      // });
     }
     setRestoreIcon(prev => prev + 1) // important link to useEffect
   }
@@ -390,9 +375,6 @@ function RightClickWindows() {
             }}
           >
             New Folder
-            {/* <span>
-                    <BsFillCaretRightFill/>
-                </span> */}
           </p>
           <h5></h5>
           <p
@@ -479,7 +461,6 @@ function RightClickWindows() {
               setRightClickDefault(false)
               iconFocusIcon('')
               askBeforeDelete();
-              // deletepermanently()
             }}
           >Delete</p>
           <h5></h5>

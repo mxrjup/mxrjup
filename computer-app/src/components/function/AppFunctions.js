@@ -2,8 +2,6 @@ import Upload from '../../assets/upload.png'
 import MyComputer from '../../assets/pc.png'
 
 
-import Resume from '../../assets/folder.png'
-import Mail from '../../assets/mail.png'
 import Project from '../../assets/regFolder.png'
 import Winamp from '../../assets/winampIcon.png'
 import MineSweeper from '../../assets/minesweepericon.png'
@@ -71,12 +69,6 @@ export function imageMapping(name, type) {
     case 'MyComputer':
     case 'My Computer':
       return MyComputer;
-
-    case 'Resume':
-      return Resume;
-
-    case 'Mail':
-      return Mail;
 
     case 'Project':
     case 'Picture':
@@ -193,21 +185,6 @@ export function handleDoubleClickPhotoOpen(name, setCurrentPhoto) {
 }
 
 
-export function handleDoubleClickPhotoOpenMobile(name, setCurrentPhoto, lastTapTime, setLastTapTime) {
-  const now = Date.now();
-  if (now - lastTapTime < 300) {
-
-    const normalized = String(parseInt(name, 10));
-
-    const pic = photoMap[normalized];
-    if (!pic) return;
-
-    setCurrentPhoto({ name: normalized, pic });
-  }
-  setLastTapTime(now);
-}
-
-// click to open links
 export function handleDoubleClickiframe(name, setOpenProjectExpand, setProjectUrl, setBackTrackIe, setForwardTrackIe) {
 
 
