@@ -13,7 +13,7 @@ const MAX_CHAT_TEXT = 500;
 
 // A chat message is a few hundred bytes of JSON; anything much bigger is not one.
 const MAX_WS_PAYLOAD = 4 * 1024;
-// Per WebSocket connection, the same pace as the REST route allows per IP.
+// Per WebSocket connection.
 const WS_MESSAGES_PER_WINDOW = 20;
 const WS_WINDOW_MS = MINUTE;
 
@@ -46,7 +46,6 @@ function limiter(windowMs, limit) {
 function createRateLimiters() {
     return {
         upload: limiter(15 * MINUTE, 10),
-        chat: limiter(MINUTE, 20),
         // Deleting, moving and creating folders share one budget.
         desktop: limiter(15 * MINUTE, 30)
     };

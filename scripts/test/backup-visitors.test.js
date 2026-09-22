@@ -13,6 +13,7 @@ const SCRIPT = path.join(CODE_ROOT, 'scripts', 'backup-visitors.sh');
 const SERVER = path.join(CODE_ROOT, 'server', 'server.js');
 // The server's own dependency, to make an image it accepts.
 const sharp = require(require.resolve('sharp', { paths: [path.join(CODE_ROOT, 'server')] }));
+const WebSocket = require(require.resolve('ws', { paths: [path.join(CODE_ROOT, 'server')] }));
 
 // Keep the user's git configuration (signing, hooks, default branch) out of the test.
 const GIT_ENV = {
@@ -79,6 +80,26 @@ const lastCommitFiles = () =>
     git(remote, 'show', '--name-only', '--format=', 'main').split('\n').filter(Boolean).sort();
 const dataFile = (name) => path.join(visitors, 'data', name);
 
+// The chat goes over the WebSocket: the first message a connection gets is the history.
+const openChat = (url) => new Promise((resolve, reject) => {
+    const ws = new WebSocket(url.replace('http', 'ws') + '/ws');
+    ws.once('message', (raw) => resolve({ ws, history: JSON.parse(raw).data }));
+    ws.once('error', reject);
+});
+const chatHistory = async (url) => {
+    const { ws, history } = await openChat(url);
+    ws.close();
+    return history;
+};
+async function sendChat(url, user, text) {
+    const { ws } = await openChat(url);
+    // The broadcast back to the sender comes once the message is saved.
+    const saved = new Promise((resolve) => ws.once('message', resolve));
+    ws.send(JSON.stringify({ type: 'message', user, text }));
+    await saved;
+    ws.close();
+}
+
 before(async () => {
     tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'mxrjup-backup-'));
     remote = path.join(tmp, 'visitors.git');
@@ -142,11 +163,7 @@ test('an upload is committed with the file and the index', async () => {
 
 test('temporary files of the atomic writes are never committed', async () => {
     await fs.writeFile(dataFile('.chat_data.json.123.abcdef.tmp'), '{"half');
-    await fetch(`${base}/api/chat/general/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: 'ann', text: 'hi' })
-    });
+    await sendChat(base, 'ann', 'hi');
 
     const { code, output } = await backup();
     assert.equal(code, 0, output);
@@ -276,8 +293,7 @@ test('a fresh clone of the backup restores the same computer', async () => {
             files,
             downloads,
             quota: await (await fetch(`${url}/api/computer/quota`)).json(),
-            rooms: await (await fetch(`${url}/api/chat/rooms`)).json(),
-            general: await (await fetch(`${url}/api/chat/general/messages`)).json()
+            chat: await chatHistory(url)
         };
     };
 

@@ -2,37 +2,19 @@ import { Component, signal, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DataService } from '../../services/data.service';
 
+// One entry of the CMS "reviews" collection (public/admin/config.yml).
 export interface MusicReview {
   id: string;
   artist: string;
-  album: string; // Wait, AdminComponent has "title", "author", "genre". 
-  // Let's check AdminComponent again. 
-  // Reviews Form: Author, Date, Genre, Cover, Text (summary?), Sound.
-  // Missing: Album Name, Artist Name. 
-  // Admin form has "Author" which might be "Review Author" or "Artist"?
-  // Usually "Author" in a review context is the Reviewer.
-  // So we are missing "Artist" and "Album" fields in Admin? 
-  // User said: "For the reviews I should add the text, the cover, the author, the date, the genre, the sounds extraits of the album."
-  // It didn't explicitly say "Artist Name" or "Album Name", but "sounds extraits of the album" implies album exists.
-  // "Author" is probably the Artist? "Author of the album"?
-  // Or "Author of the review"?
-  // Given "For the cool stuff... author" refers to creator of the thing.
-  // I will assume definitions:
-  // Author -> Artist 
-  // But where is Album Title?
-  // Maybe "Author" = Artist, and I need to add Album Title?
-  // User didn't specify Album Title in the list of things to add for reviews, strangely.
-  // "add the text, the cover, the author, the date, the genre, the sounds extraits".
-  // Maybe "Author" means "Artist & Album"?
-  // Let's stick to what I have in Admin (Author, Genre, etc) and map it.
-  // I'll genericize the interface.
-  cover: string;
+  album: string;
   genre: string;
-  author: string; // Artist
-  text: string;
-  sound: string;
+  cover: string;
+  author: string; // who wrote the review
   date: string;
-  // Computed or missing properties handled gracefully
+  score?: string;
+  text: string; // summary shown in the list
+  content?: string;
+  extracts?: { title: string; url: string }[];
 }
 
 @Component({

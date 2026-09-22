@@ -1,5 +1,4 @@
 import { Component, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { DataService } from '../../services/data.service';
 
@@ -11,7 +10,7 @@ interface Credit {
 @Component({
     selector: 'app-credits',
     standalone: true,
-    imports: [CommonModule, RouterLink],
+    imports: [RouterLink],
     templateUrl: './credits.html',
     styleUrls: ['./credits.scss']
 })

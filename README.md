@@ -7,7 +7,7 @@ Generated with [Angular CLI](https://github.com/angular/angular-cli) 21.1.2.
 ```
 src/           Angular app            server/       Express: API, visitor data store
 public/        static + /admin        computer-app/ React (Vite) Windows 95 app
-scripts/       Spotify timeline sync  dist/         build output (git-ignored)
+scripts/       host build, backup     dist/         build output (git-ignored)
 ```
 
 ## Local setup
@@ -136,10 +136,10 @@ decides what gets in (`server/uploadPolicy.js`) and how it is served (`server/se
   same-origin` and a `Content-Type` from the extension. A file with any other extension
   (uploaded before these rules) is sent as `application/octet-stream`, as an attachment.
   The rest of the site gets `nosniff` too.
-- **Rate limits, per IP**: 10 uploads per 15 minutes, 20 chat messages per minute over
-  REST, 30 deletes/moves/folder creations per 15 minutes; then 429. A WebSocket connection
-  may send 20 messages a minute, in frames of at most 4 KB (a larger one closes it). Chat
-  messages are capped at 500 characters and names at 30, over REST and WebSocket alike.
+- **Rate limits, per IP**: 10 uploads per 15 minutes, 30 deletes/moves/folder creations
+  per 15 minutes; then 429. The chat goes over the WebSocket only: a connection may send
+  20 messages a minute, in frames of at most 4 KB (a larger one closes it). Chat messages
+  are capped at 500 characters and names at 30.
 
 The rate limits count by `req.ip`, which is only the visitor's address if Express knows
 how many proxies stand in front of the server: otherwise every visitor shares the
@@ -356,49 +356,3 @@ the Manager's web console.
    show a green tick under *Recent Deliveries*.
 6. **Check the backup** once by hand: `bash mxrjup/scripts/backup-visitors.sh` ends
    with `pushed to origin/main`.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
