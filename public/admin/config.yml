@@ -165,7 +165,7 @@ collections:
               - name: type
                 label: Type
                 widget: select
-                options: [BOOK, PRODUCT, ARTICLE, MUSIC, IMAGE]
+                options: [BOOK, PRODUCT, ARTICLE, MUSIC, IMAGE, 'SKATE PART']
               - { name: subtitle, label: Subtitle / author, widget: string, required: false }
               - { name: link, label: Link, widget: string, required: false }
               - { name: image, label: Image, widget: image }
