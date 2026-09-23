@@ -27,15 +27,35 @@
   padding: 0;
 }
 
-html, body {
-  width: 100%;
+/* The document is the scroller. Giving html/body a fixed `height: 100%` together
+   with `overflow-x: hidden` turned body into its own scroll box: the page never
+   scrolled, `window.scrollTo` did nothing, and on phones the URL bar never
+   collapsed, so the last screenful of every page sat under the browser chrome.
+   Pages that need to hide a decorative bleed use `overflow-x: clip` locally,
+   which clips without creating a scroll container. */
+html {
   height: 100%;
+  /* Landscape on iOS otherwise inflates body copy. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-main);
-  overflow-x: hidden;
+  overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Nothing here is a pointing-device target smaller than a fingertip. */
+@media (hover: none) {
+  a,
+  button {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  }
 }
 
 /* Scrollbar hiding for that 'app' feel */
@@ -48,6 +68,12 @@ html, body {
 ::selection {
   background: var(--color-accent);
   color: var(--color-bg);
+}
+
+/* Set while a lightbox is open. Without it a drag on the overlay scrolls the
+   page underneath, so closing the lightbox drops you somewhere else. */
+body.lightbox-open {
+  overflow: hidden;
 }
 
 /* Utility Classes */

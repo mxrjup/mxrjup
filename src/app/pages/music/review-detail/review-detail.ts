@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, OnInit } from '@angular/core';
+import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DataService } from '../../../services/data.service';
 
@@ -9,7 +9,7 @@ import { DataService } from '../../../services/data.service';
   templateUrl: './review-detail.html',
   styleUrl: './review-detail.scss'
 })
-export class ReviewDetailComponent implements OnInit {
+export class ReviewDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private dataService = inject(DataService);
 
@@ -32,9 +32,16 @@ export class ReviewDetailComponent implements OnInit {
 
   openLightbox(extract: { title: string, url: string }) {
     this.activeExtract.set(extract);
+    document.body.classList.add('lightbox-open');
   }
 
   closeLightbox() {
     this.activeExtract.set(null);
+    document.body.classList.remove('lightbox-open');
+  }
+
+  // Leaving the page with the lightbox open would strand the class on <body>.
+  ngOnDestroy() {
+    document.body.classList.remove('lightbox-open');
   }
 }

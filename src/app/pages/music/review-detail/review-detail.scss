@@ -108,6 +108,24 @@
     text-decoration: underline;
 }
 
+/* The body is CMS HTML, so nothing here controls what it contains. Keep whatever
+   it holds inside the column rather than letting it push the page sideways. */
+.article-text ::ng-deep img,
+.article-text ::ng-deep video,
+.article-text ::ng-deep iframe,
+.article-text ::ng-deep table {
+    max-width: 100%;
+    height: auto;
+}
+
+.article-text ::ng-deep pre {
+    overflow-x: auto;
+}
+
+.article-text ::ng-deep a {
+    overflow-wrap: anywhere;
+}
+
 /* Extracts - Matching Media Grid Style */
 .extracts-section {
     background: transparent;
@@ -269,6 +287,11 @@
     height: 60px;
 }
 
+.audio-player audio {
+    width: 100%;
+    max-width: 320px;
+}
+
 .lightbox-meta {
     display: flex;
     justify-content: space-between;
@@ -283,4 +306,64 @@
     border: none;
     font-weight: bold;
     cursor: pointer;
+}
+
+/* Mobile. The page was written at desktop sizes only: 2rem gutters plus a 3rem
+   title left an ordinary album name overflowing a 320px screen. */
+@media (max-width: 768px) {
+    .container {
+        padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+    }
+
+    .album-title {
+        font-size: clamp(1.75rem, 8.5vw, 2.5rem);
+        overflow-wrap: anywhere;
+    }
+
+    .artist-name {
+        font-size: 1.15rem;
+    }
+
+    .cover-art {
+        margin: 1.5rem auto;
+    }
+
+    .review-body {
+        font-size: 1rem;
+    }
+
+    .byline {
+        margin-bottom: 1.5rem;
+    }
+
+    .extracts-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .audio-placeholder .format-text {
+        font-size: 2rem;
+    }
+
+    .footer {
+        margin-top: 2.5rem;
+    }
+
+    .back-link {
+        display: inline-block;
+        padding: 12px 0;
+    }
+
+    .lightbox-content {
+        padding: 1.25rem;
+    }
+}
+
+/* Touch targets are about the finger, not the screen width: a phone held
+   sideways is wider than 768px and still has no cursor. */
+@media (pointer: coarse) {
+    .back-link {
+        display: inline-block;
+        padding: 12px 0;
+    }
 }
