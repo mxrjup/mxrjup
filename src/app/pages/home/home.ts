@@ -17,6 +17,7 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
   private effect!: AsciiEffect;
   private animationId: number | null = null;
   private sphere!: THREE.Mesh;
+  private onResize?: () => void;
 
   constructor(private ngZone: NgZone) { }
 
@@ -28,6 +29,9 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
+    }
+    if (this.onResize) {
+      window.removeEventListener('resize', this.onResize);
     }
     if (this.renderer) {
       this.renderer.dispose();
@@ -95,18 +99,24 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
       animate();
 
-      // Resize
-      window.addEventListener('resize', () => {
-        if (!container) return;
+      // Resize. A phone fires `resize` on every scroll, because hiding the URL
+      // bar changes innerHeight; rebuilding the ASCII grid that often makes the
+      // page stutter under the finger. Only a width change is a real rotation or
+      // window resize, so height-only changes are ignored.
+      let lastWidth = window.innerWidth;
+      this.onResize = () => {
         const width = window.innerWidth;
-        const height = window.innerHeight;
+        if (width === lastWidth) return;
+        lastWidth = width;
 
+        const height = window.innerHeight;
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
 
         this.renderer.setSize(width, height);
         this.effect.setSize(width, height);
-      });
+      };
+      window.addEventListener('resize', this.onResize);
     });
   }
 }

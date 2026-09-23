@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, signal, inject, OnInit, OnDestroy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { UpperCasePipe } from '@angular/common';
 import { DataService } from '../../services/data.service';
@@ -18,7 +18,7 @@ export interface MediaItem {
   templateUrl: './media.html',
   styleUrl: './media.scss'
 })
-export class MediaComponent implements OnInit {
+export class MediaComponent implements OnInit, OnDestroy {
   private dataService = inject(DataService);
 
   items = signal<MediaItem[]>([]);
@@ -33,9 +33,16 @@ export class MediaComponent implements OnInit {
 
   openLightbox(item: MediaItem) {
     this.activeItem.set(item);
+    document.body.classList.add('lightbox-open');
   }
 
   closeLightbox() {
     this.activeItem.set(null);
+    document.body.classList.remove('lightbox-open');
+  }
+
+  // Leaving the page with the lightbox open would strand the class on <body>.
+  ngOnDestroy() {
+    document.body.classList.remove('lightbox-open');
   }
 }

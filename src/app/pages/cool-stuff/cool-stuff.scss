@@ -227,7 +227,29 @@
         gap: 10px;
 
         .page-title {
-            font-size: 1.5rem;
+            font-size: clamp(1.15rem, 6vw, 1.5rem);
+            letter-spacing: -1px;
+            /* "COOL STUFF_DIRECTORY" has no break opportunity of its own. */
+            overflow-wrap: anywhere;
         }
+    }
+
+    /* Titles come from the CMS, so a long unbroken one has to wrap rather than
+       run off the screen. */
+    .directory-item .item-title,
+    .directory-item .item-subtitle {
+        overflow-wrap: anywhere;
+    }
+
+    .directory-list {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
+/* The hover preview is a pointer affordance; on a touch screen it would stick
+   open on whichever row was tapped last. */
+@media (hover: none) {
+    .reveal-image-container {
+        display: none;
     }
 }

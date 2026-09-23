@@ -442,3 +442,41 @@ li {
     .album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .records { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Touch targets. The controls are sized for a cursor; on a finger they need
+   height, and the page needs to clear the home indicator. */
+@media (max-width: 768px) {
+    .container {
+        padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+    }
+
+    .back-link {
+        display: inline-block;
+        padding: 10px 0;
+    }
+
+    .segmented button {
+        min-height: 40px;
+    }
+
+    .see-all {
+        padding: 8px 0 8px 12px;
+    }
+}
+
+/* Touch targets are about the finger, not the screen width: a phone held
+   sideways is wider than 768px and still has no cursor. */
+@media (pointer: coarse) {
+    .back-link {
+        display: inline-block;
+        padding: 10px 0;
+    }
+
+    .segmented button {
+        min-height: 40px;
+    }
+
+    .see-all {
+        padding: 8px 0 8px 12px;
+    }
+}

@@ -3,9 +3,9 @@
 :host {
     display: block;
     width: 100%;
-    height: 100vh;
-    overflow: hidden;
-    /* No scroll, fixed screen app feel */
+    /* dvh, not vh: on a phone `100vh` is the height with the URL bar hidden, so a
+       vh-sized poster always hid its own bottom edge behind the browser chrome. */
+    min-height: 100dvh;
     background: white;
     /* or transparent to show anything behind? Default white base */
     color: black;
@@ -15,7 +15,23 @@
 .brutalist-container {
     position: relative;
     width: 100%;
-    height: 100%;
+    min-height: 100dvh;
+    /* The decor images bleed past the edges on purpose; `clip` hides the bleed
+       without turning this into a scroll container the way `hidden` would. */
+    overflow-x: clip;
+}
+
+/* From tablet up the poster is a single fixed screen, as designed: everything is
+   placed absolutely and nothing is meant to scroll. */
+@media (min-width: 769px) {
+    :host {
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .brutalist-container {
+        height: 100%;
+    }
 }
 
 /* --- 1. Background (Three.js) --- */
@@ -23,11 +39,14 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100dvh;
     z-index: 0;
     opacity: 0.8;
     pointer-events: none;
+    /* The ASCII grid rounds up to whole characters and so is a little wider than
+       the screen; keep the spill off the edges. */
+    overflow: hidden;
 
     /* Make sure ASCII is visible */
     background: transparent;
@@ -68,7 +87,7 @@
 .chaos-content {
     position: relative;
     width: 100%;
-    height: 100%;
+    min-height: 100dvh;
     z-index: 10;
     display: flex;
     flex-direction: column;
@@ -421,125 +440,15 @@
     }
 }
 
-/* Mobile Adjustments */
-/* Mobile Adjustments */
-@media (max-width: 768px) {
-
-    /* Chaos Content padding */
-    .chaos-content {
-        padding-top: 80px;
-        justify-content: flex-start;
-        overflow-y: auto;
-        /* Allow scrolling content if it gets too tall */
-        padding-bottom: 60px;
-        /* Space for marquee */
-    }
-
-    /* Scale down giant text */
-    .giant-text {
-        font-size: 3rem;
-        /* Much smaller than desktop */
-        margin-top: 20px;
-    }
-
-    /* Manifesto: Scale down but keep visible */
-    .manifesto-block {
-        display: block;
-        /* Show it! */
-        position: relative;
-        top: auto;
-        left: auto;
-        transform: none;
-        width: 90%;
-        margin: 20px auto;
-
-        .large-multilingual {
-            font-size: 1.5rem;
-        }
-    }
-
-    /* Secondary text: Stack it */
-    .secondary-text-block {
-        position: relative;
-        bottom: auto;
-        right: auto;
-        text-align: center;
-        margin: 20px 0;
-        font-size: 1.2rem;
-    }
-
-    /* Navigation Stickers: Flex Column/Grid */
-    .music-badge,
-    .cool-badge,
-    .nav-sticker,
-    .project-sticker,
-    .media-sticker {
-        position: relative !important;
-        top: auto !important;
-        left: auto !important;
-        right: auto !important;
-        bottom: auto !important;
-        transform: none !important;
-        display: block;
-        width: 80%;
-        margin: 10px auto;
-        text-align: center;
-    }
-
-    .nav-badge .vertical-text {
-        writing-mode: horizontal-tb;
-        letter-spacing: 2px;
-        font-size: 1.2rem;
-    }
-
-    /* Decor Images: SCALED DOWN, not hidden */
-    .decor-image {
-        display: block;
-        width: 100px;
-        /* Base mobile size */
-        opacity: 0.5;
-        /* Slightly more transparent to not block text */
-    }
-
-    .img-1 {
-        top: 60px;
-        right: -20px;
-        width: 120px;
-    }
-
-    .img-2 {
-        bottom: 50px;
-        left: -20px;
-        width: 140px;
-    }
-
-    .img-3 {
-        top: 20%;
-        left: -10px;
-        width: 80px;
-    }
-
-    .img-4 {
-        bottom: 80px;
-        right: -10px;
-        width: 100px;
-    }
-
-    /* Desktop Icon Mobile Layout */
-    .desktop-icon-link {
-        bottom: auto;
-        left: auto;
-        transform: none;
-        top: 80px;
-        /* Below header */
-        right: 20px;
-    }
+/* --- Marquee safe area (iPhone home indicator) --- */
+.marquee-bottom {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
 }
 
 /* Credits Button */
 .credits-btn {
     position: fixed;
-    bottom: 45px;
+    bottom: calc(45px + env(safe-area-inset-bottom));
     /* Above marquee */
     right: 20px;
     z-index: 50;
@@ -562,11 +471,190 @@
     }
 }
 
+/* --- Mobile Adjustments ---
+   The poster is absolutely positioned and sized to the viewport, which cannot
+   survive a phone screen: below 769px everything drops into a single scrolling
+   column instead. Nothing here is fixed-height and nothing scrolls on its own,
+   so the page scrolls as one document and the URL bar collapses normally. */
 @media (max-width: 768px) {
+
+    .brutalist-container {
+        /* Clear the fixed marquee at the bottom of the screen. */
+        padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    }
+
+    /* Header stickers join the column rather than floating over the title. */
+    .floating-header {
+        position: static;
+        /* The two stickers collide below ~360px; let the second one drop. */
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 16px 16px 0;
+        font-size: clamp(0.7rem, 3.6vw, 0.85rem);
+        align-items: flex-start;
+
+        .sticker-logo,
+        .sticker-est {
+            box-shadow: 3px 3px 0px black;
+        }
+    }
+
+    .chaos-content {
+        min-height: 0;
+        justify-content: flex-start;
+        gap: 22px;
+        padding: 28px 16px 32px;
+    }
+
+    /* Scale down giant text */
+    .giant-text {
+        font-size: clamp(2.25rem, 13vw, 3.25rem);
+        /* Much smaller than desktop */
+        margin-top: 0;
+    }
+
+    /* Manifesto: Scale down but keep visible */
+    .manifesto-block {
+        display: block;
+        /* Show it! */
+        position: relative;
+        top: auto;
+        left: auto;
+        transform: none;
+        width: 100%;
+        margin: 0;
+        /* White-on-difference reads as plain white here, so the block took up a
+           screenful of invisible text. In the stacked column it is ordinary
+           black type instead. */
+        mix-blend-mode: normal;
+        color: black;
+
+        .large-multilingual {
+            font-size: clamp(1.15rem, 6vw, 1.5rem);
+            margin-bottom: 0;
+        }
+    }
+
+    /* Secondary text: Stack it */
+    .secondary-text-block {
+        position: relative;
+        bottom: auto;
+        right: auto;
+        text-align: center;
+        margin: 0;
+        font-size: clamp(1rem, 5vw, 1.2rem);
+    }
+
+    /* Navigation Stickers: one tappable row each */
+    .music-badge,
+    .cool-badge,
+    .nav-sticker,
+    .project-sticker,
+    .media-sticker {
+        position: relative;
+        top: auto;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        transform: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        max-width: 420px;
+        min-height: 64px;
+        margin: 0;
+        padding: 16px;
+        text-align: center;
+
+        /* A tap leaves :hover stuck on touch devices; keep the poster's hover
+           flourishes for pointers only. */
+        &:hover {
+            transform: none;
+        }
+    }
+
+    .nav-badge .vertical-text {
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        letter-spacing: 2px;
+        font-size: 1.2rem;
+    }
+
+    /* The computer joins the same column instead of floating over the title. */
+    .desktop-icon-link {
+        position: relative;
+        inset: auto;
+        width: auto;
+        min-height: 64px;
+        padding: 8px 16px;
+        flex-direction: row;
+        gap: 12px;
+
+        .desktop-icon-img {
+            margin-bottom: 0;
+        }
+    }
+
+    /* Decor Images: scaled down, and kept inside the screen so nothing can
+       scroll sideways. */
+    .decor-image {
+        display: block;
+        width: 100px;
+        opacity: 0.35;
+        /* Behind the links, not over them */
+        z-index: 1;
+    }
+
+    .img-1 {
+        top: 4%;
+        right: 0;
+        left: auto;
+        width: 110px;
+    }
+
+    .img-2 {
+        bottom: 0;
+        left: 0;
+        right: auto;
+        width: 120px;
+    }
+
+    .img-3 {
+        top: 24%;
+        left: 0;
+        right: auto;
+        width: 78px;
+    }
+
+    .img-4 {
+        bottom: 12%;
+        right: 0;
+        left: auto;
+        width: 96px;
+    }
+
+    .marquee-content span {
+        font-size: 1rem;
+    }
+
     .credits-btn {
-        bottom: 50px;
-        /* Adjust for mobile marquee/spacing */
-        right: 10px;
-        font-size: 0.7rem;
+        /* In the column with everything else: a fixed badge would sit on top of
+           whichever link happened to scroll under it. */
+        position: static;
+        display: block;
+        width: fit-content;
+        margin: 4px auto 0;
+        padding: 8px 14px;
+        font-size: 0.75rem;
+        opacity: 1;
+    }
+}
+
+/* Touch targets are about the finger, not the screen width: a phone held
+   sideways is wider than 768px and still has no cursor. */
+@media (pointer: coarse) {
+    .credits-btn {
+        padding: 8px 12px;
     }
 }

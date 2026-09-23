@@ -95,28 +95,76 @@
     flex: 1;
 }
 
-/* Mobile */
+/* Mobile
+   The desktop layout is a fixed header floating over three fixed-width columns.
+   On a phone that fell apart three ways: `difference` over the white mobile
+   header painted the whole band black, `left`/`right` do nothing once the header
+   is sticky so its labels no longer lined up with the rows beneath them, and the
+   fixed CLOSE button sat on top of the "Subject" label. Here the header is a
+   plain sticky bar and the row becomes date + object over a full-width subject. */
 @media (max-width: 768px) {
     .swiss-container {
         font-size: 1rem;
     }
 
-    .col-date {
-        width: 100px;
-    }
-
-    .col-object {
-        width: 100px;
+    .back-link {
+        top: calc(10px + env(safe-area-inset-top));
+        right: 10px;
+        font-size: 0.85rem;
+        padding: 8px 10px;
     }
 
     .grid-header {
         position: sticky;
-        background: white;
-        /* On mobile, chaos might be unusable */
         top: 0;
+        left: auto;
+        right: auto;
+        /* Opaque, so rows scroll under it rather than through it. */
+        background: white;
+        border-bottom: 1px solid black;
+        mix-blend-mode: normal;
+        pointer-events: auto;
+        /* Matches .grid-body's gutter, and clears the CLOSE button. */
+        padding: 12px 96px 12px 16px;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
 
     .grid-body {
         margin-top: 0;
+        padding: 0 16px calc(48px + env(safe-area-inset-bottom));
+    }
+
+    .grid-row {
+        flex-wrap: wrap;
+        gap: 0 12px;
+        padding: 14px 0;
+        border-bottom: 1px solid #e6e6e6;
+    }
+
+    /* The subject runs full width under each row, so a third heading would only
+       collide with "Object" in the one-line sticky bar. */
+    .grid-header .col-subject {
+        display: none;
+    }
+
+    .col-date {
+        width: auto;
+        min-width: 96px;
+        opacity: 0.6;
+    }
+
+    .col-object {
+        width: auto;
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* The subject is the long one: give it the full width on its own line. */
+    .col-subject {
+        flex: 0 0 100%;
+        margin-top: 4px;
+        font-weight: normal;
     }
 }

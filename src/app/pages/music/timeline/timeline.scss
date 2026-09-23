@@ -69,14 +69,16 @@
     /* Dynamic stacking order: later items in list (lower in visual flow) are on top? 
      Or reverse z-index? Let's use hover to bring to front. */
 
-    &:hover {
-        height: 250px;
-        /* Expand to full size on hover */
-        z-index: 100 !important;
+    @media (hover: hover) {
+        &:hover {
+            height: 250px;
+            /* Expand to full size on hover */
+            z-index: 100 !important;
 
-        .card {
-            transform: scale(1.1) rotate(0deg);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            .card {
+                transform: scale(1.1) rotate(0deg);
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            }
         }
     }
 
@@ -139,6 +141,10 @@
     .info {
         display: flex;
         flex-direction: column;
+        /* Without this a flex item refuses to shrink below its content, and the
+           title pushed straight through the card's right border on narrow
+           screens. */
+        min-width: 0;
     }
 
     .date {
@@ -161,32 +167,51 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 200px;
     }
 }
 
-/* Hover State Expansion */
-.album-entry:hover .card {
-    flex-direction: column;
-    width: 220px;
-    padding: var(--spacing-md);
+/* Hover State Expansion. Guarded on `hover: hover` so a phone, where a tap
+   leaves the state stuck on the last card touched, keeps the plain layout. */
+@media (hover: hover) {
+    .album-entry:hover .card {
+        flex-direction: column;
+        width: 220px;
+        padding: var(--spacing-md);
 
-    img {
-        width: 100%;
-        height: 200px;
-    }
+        img {
+            width: 100%;
+            height: 200px;
+        }
 
-    .title {
-        white-space: normal;
-        text-align: center;
-    }
+        .title {
+            white-space: normal;
+            text-align: center;
+        }
 
-    .info {
-        align-items: center;
+        .info {
+            align-items: center;
+        }
     }
 }
 
 @media (max-width: 768px) {
+    .container {
+        padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+    }
+
+    .header {
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .back-link {
+        display: inline-block;
+        padding: 10px 0;
+    }
+
+    .timeline-container {
+        padding-bottom: 80px;
+    }
+
     .spine {
         left: 20px;
     }
@@ -201,6 +226,11 @@
 
     .album-entry {
         width: 100%;
+        /* The desktop trick is a short entry with a taller card poking out of it,
+           so the cards overlap. On one narrow column that just makes rows sit on
+           top of each other, so the entry is sized to its card instead. */
+        height: auto;
+        margin-bottom: 12px;
         left: 0 !important;
         justify-content: flex-start !important;
         padding-left: 20px !important;
@@ -215,5 +245,21 @@
             width: 100%;
             max-width: 300px;
         }
+
+        /* No hover on a phone, so the full title has to fit here. */
+        .title {
+            white-space: normal;
+            overflow: visible;
+            overflow-wrap: anywhere;
+        }
+    }
+}
+
+/* Touch targets are about the finger, not the screen width: a phone held
+   sideways is wider than 768px and still has no cursor. */
+@media (pointer: coarse) {
+    .back-link {
+        display: inline-block;
+        padding: 10px 0;
     }
 }
