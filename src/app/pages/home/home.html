@@ -58,14 +58,16 @@
 
         <!-- Decor Images (Scattered) -->
         <a href="/computer" target="_self" class="desktop-icon-link">
-            <img src="/assets/pc.png" alt="Computer" class="desktop-icon-img">
+            <img src="/assets/pc.png" alt="Computer" class="desktop-icon-img" width="48" height="48">
             <span class="desktop-icon-text">FAMILY COMPUTER</span>
         </a>
-        <!-- Decor Images (Scattered) -->
-        <img src="/uploads/imageMainPage1.jpg" alt="Decor 1" class="decor-image img-1">
-        <img src="/uploads/imageMainPage2.jpg" alt="Decor 2" class="decor-image img-2">
-        <img src="/uploads/imageMainPage3.jpg" alt="Decor 3" class="decor-image img-3">
-        <img src="/uploads/imageMainPage4_final.png" alt="Decor 4" class="decor-image img-4">
+        <!-- Decor Images (Scattered). The widest any of them is drawn is 400px,
+             so w=800 is already twice what a dense screen needs; the CMS holds
+             them at up to 1125px and, for the last one, 856 kB of PNG. -->
+        <img src="/uploads/imageMainPage1.jpg?w=800" alt="Decor 1" class="decor-image img-1">
+        <img src="/uploads/imageMainPage2.jpg?w=800" alt="Decor 2" class="decor-image img-2">
+        <img src="/uploads/imageMainPage3.jpg?w=800" alt="Decor 3" class="decor-image img-3">
+        <img src="/uploads/imageMainPage4_final.png?w=800" alt="Decor 4" class="decor-image img-4">
     </main>
 
     <!-- Credits Button (Discrete) -->

@@ -31,9 +31,17 @@
   <link rel="icon" type="image/png" href="/src/assets/95icon.png" />
   <link rel="apple-touch-icon" href="/src/assets/95icon.png" />
 
-  <!-- Preloading and Resource Hints -->
-  <link rel="preload" href="/src/assets/95icon.png" as="image" />
-  <link rel="preload" href="/src/main.jsx" as="script" />
+  <!-- The mine counter and the clock of Minesweeper. Loaded here rather than
+       with an @import in MineSweeper.css, which a browser fetches from a third
+       party before it may paint anything: media="print" takes it off that path
+       and onload puts it back. Two elements of one game are not worth a blank
+       screen. -->
+  <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/digital-dismay"
+        media="print" onload="this.media='all'" />
+
+  <!-- The preloads that used to be here named /src/main.jsx and /src/assets,
+       paths that only exist while the dev server is running: the build turned
+       each into a data: URI of the unbundled source that nothing ever read. -->
 
   <!-- Title -->
   <title>Family Computer</title>

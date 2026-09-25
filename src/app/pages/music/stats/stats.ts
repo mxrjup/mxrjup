@@ -1,6 +1,7 @@
 import { Component, computed, signal, inject, OnInit, OnDestroy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DataService } from '../../../services/data.service';
+import { spotifySrcset } from '../../../shared/spotify-image';
 
 // data/stats.json of the content repository, written every Monday by the private
 // mxrjup-listening repository - its README says how each number is counted. Every list
@@ -267,6 +268,15 @@ export class StatsComponent implements OnInit, OnDestroy {
 
   count(n: number) {
     return numbers.format(n);
+  }
+
+  /**
+   * Every size Spotify has of a thumbnail, for the browser to choose from. The
+   * stored URL is the 300px one and these are drawn at 56: on an ordinary
+   * screen that is 44 kB where 3 kB would do, and the whole page is 47 images.
+   */
+  srcset(url?: string) {
+    return spotifySrcset(url);
   }
 
   plays(n: number) {

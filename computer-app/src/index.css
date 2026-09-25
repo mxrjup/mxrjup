@@ -1,7 +1,12 @@
 
 @font-face {
     font-family: 'win95';
-    src: url('../src/assets/win95.ttf') format('truetype');
+    /* WOFF2 first: the same face is 49 kB there against 288 kB as TrueType, and
+       every browser that can run this app reads it. The .ttf stays as the
+       fallback for anything that cannot. */
+    src: url('../src/assets/win95.woff2') format('woff2'),
+         url('../src/assets/win95.ttf') format('truetype');
+    font-display: swap;
 }
 
 #root {

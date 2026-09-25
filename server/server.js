@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const multer = require('multer');
@@ -14,13 +15,21 @@ const {
 } = require('./abuseLimits');
 const { createContentUpdater, createContentHook } = require('./contentWebhook');
 const { scheduleDaily, runBackupScript } = require('./backupSchedule');
+const {
+    NO_STORE, angularCacheControl, computerCacheControl
+} = require('./cachePolicy');
+const { createImageVariants } = require('./imageVariants');
+const { createImageSizes } = require('./imageSize');
 
 const app = express();
 // Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
 const PORT = process.env.PORT || 3000;
 const CODE_ROOT = path.join(__dirname, '..');
-const BROWSER_DIR = path.join(CODE_ROOT, 'dist/angular-mxrjup/browser');
-const COMPUTER_DIR = path.join(CODE_ROOT, 'dist/computer');
+// Where the two builds land. The host always runs the build before starting the
+// server, so the defaults hold in production; the overrides are what lets the
+// tests point at a directory they control.
+const BROWSER_DIR = path.resolve(CODE_ROOT, process.env.BROWSER_DIR || 'dist/angular-mxrjup/browser');
+const COMPUTER_DIR = path.resolve(CODE_ROOT, process.env.COMPUTER_DIR || 'dist/computer');
 
 // The server reads and writes nothing inside the code checkout. Content (the CMS's
 // JSON and media) and visitor data are separate repositories, checked out wherever
@@ -80,6 +89,15 @@ app.use((req, res, next) => {
     next();
 });
 
+// Nothing sits in front of this process, so nothing else can compress. Without
+// this the Angular bundle goes out as 800 kB of plain text instead of 220 kB,
+// and the content JSON at four to six times its compressed size. Everything
+// text-based is covered: the two app bundles, the stylesheets and /api/data.
+// compression leaves images, fonts and video alone (they are already
+// compressed) and skips bodies under 1 kB, where the framing costs more than
+// it saves.
+app.use(compression());
+
 // GitHub calls this on every push to mxrjup-content, and the server pulls the content
 // itself (contentWebhook.js). Mounted ahead of the JSON parser: the signature covers
 // the exact bytes GitHub sent, so the body must reach the handler untouched.
@@ -129,6 +147,10 @@ app.use('/uploads/users', (req, res) => res.sendStatus(404));
 // disk in seconds, so browsers must revalidate (a cheap 304 via the ETag) rather than
 // show a stale image for however long a max-age would allow.
 const REVALIDATE = 'no-cache';
+const imageSizes = createImageSizes({ dir: CONTENT_UPLOADS_DIR });
+// A page that shows an image small asks for it small: /uploads/art.png?w=800.
+// Mounted ahead of the originals, which answer everything it passes on.
+app.use('/uploads', createImageVariants({ dir: CONTENT_UPLOADS_DIR }));
 app.use('/uploads', express.static(CONTENT_UPLOADS_DIR, {
     cacheControl: false,
     setHeaders: (res) => res.setHeader('Cache-Control', REVALIDATE)
@@ -186,6 +208,9 @@ app.get('/api/data/:type', async (req, res) => {
         // A hidden album stays in timeline.json so the weekly Spotify sync of the
         // content repository does not add it back; it is only kept off the site.
         if (type === 'timeline') items = items.filter((item) => item.hidden !== true);
+        // The media grid lays out pictures of every shape; without their sizes
+        // each one that loads pushes the rows under it down (imageSize.js).
+        if (type === 'media') items = await imageSizes.describe(items);
         // The file is re-read on every request so a publish shows up at once; keep
         // browsers from answering from their cache instead (res.json sets the ETag).
         res.setHeader('Cache-Control', REVALIDATE);
@@ -515,30 +540,61 @@ app.delete('/api/computer/folder/:name', limits.desktop, async (req, res) => {
 // this server also serves both builds. Registered after the API routes above so
 // it only sees what they didn't handle.
 
-// The app shells must never be cached: their filename is stable while the
-// hashed bundles they point at change on every build, so a cached copy keeps
-// loading the previous release. nginx set this before it was removed.
-const NO_STORE = 'no-store, no-cache, must-revalidate';
-const shellHeaders = (res, filePath) => {
-    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', NO_STORE);
+/** Apply a Cache-Control the policy asked for, or leave Express's default. */
+const cacheControl = (pick) => (res, filePath) => {
+    const value = pick(filePath);
+    if (value) res.setHeader('Cache-Control', value);
 };
+const angularHeaders = cacheControl((f) => angularCacheControl(BROWSER_DIR, f));
+const computerHeaders = cacheControl((f) => computerCacheControl(COMPUTER_DIR, f));
+
 const sendShell = (res, next, dir) => {
     res.setHeader('Cache-Control', NO_STORE);
     res.sendFile(path.join(dir, 'index.html'), (err) => err && next());
 };
 
+/**
+ * Whether this request is someone opening a URL, rather than a page asking for
+ * a file it needs.
+ *
+ * Both apps route on the client, so an address the server has no file for is
+ * normally a page of theirs and must be answered with the shell. A missing
+ * script is not: it used to get the shell too, which a browser then refused as
+ * the wrong MIME type - an error naming neither the file nor the fact that it
+ * was gone - while the server logged a 200. Since each page is now fetched on
+ * demand (app.routes.ts), a tab left open across a deploy asks for chunks that
+ * no longer exist, so the difference matters.
+ *
+ * Sec-Fetch-Dest is the browser saying which it is. A request without it is
+ * treated as a navigation, as everything was before: that keeps curl, uptime
+ * checks and browsers too old to send it working exactly as they did, and the
+ * browsers that do send it - all of them that can run this app - get a straight
+ * 404 for a file that is not there.
+ */
+const wantsPage = (req) => {
+    const dest = req.headers['sec-fetch-dest'];
+    return dest === undefined || dest === 'document';
+};
+
 // Windows 95 computer app (React, built to dist/computer)
-app.use('/computer', express.static(COMPUTER_DIR, { setHeaders: shellHeaders }));
-app.get('/computer/*', (req, res, next) => sendShell(res, next, COMPUTER_DIR));
+app.use('/computer', express.static(COMPUTER_DIR, { setHeaders: computerHeaders }));
+app.get('/computer/*', (req, res, next) => {
+    // Answered here rather than passed on: next() would reach the Angular shell
+    // below, which is a different app's page.
+    if (!wantsPage(req)) return res.sendStatus(404);
+    sendShell(res, next, COMPUTER_DIR);
+});
 
 // The old hand-built back office lived here; send bookmarks to the CMS.
 app.get('/add', (req, res) => res.redirect(302, '/admin/'));
 
 // Angular site, with client-side routing falling back to its index.html
-app.use(express.static(BROWSER_DIR, { setHeaders: shellHeaders }));
+app.use(express.static(BROWSER_DIR, { setHeaders: angularHeaders }));
 app.get('*', (req, res, next) => {
     // Unmatched API and upload paths are 404s, not the Angular shell.
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    // Nothing is registered after this, so next() is the 404.
+    if (!wantsPage(req)) return next();
     sendShell(res, next, BROWSER_DIR);
 });
 

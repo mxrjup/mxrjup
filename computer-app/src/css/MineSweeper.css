@@ -1,6 +1,8 @@
 /* ------------ Folders ---------------- */
 
-@import url('https://fonts.cdnfonts.com/css/digital-dismay');
+/* The Digital Dismay face, for the mine counter and the clock, is loaded from
+   index.html instead: an @import here is fetched from a third party before
+   anything can be painted, for a font two elements of one game use. */
 
 
 .folder_folder-MineSweeper {

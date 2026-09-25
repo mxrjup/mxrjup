@@ -3,6 +3,23 @@ import { RouterLink } from '@angular/router';
 import * as THREE from 'three';
 import { AsciiEffect } from 'three/examples/jsm/effects/AsciiEffect.js';
 
+// How many characters the effect draws per pixel of window. This is
+// AsciiEffect's own default, passed explicitly because the render size below is
+// derived from it.
+const ASCII_RESOLUTION = 0.15;
+
+// The knot turns slowly enough that 30 frames a second is indistinguishable
+// from 60, and every frame costs a full re-parse of the character grid.
+const FRAME_MS = 1000 / 30;
+
+/** The character grid AsciiEffect derives from a window size. */
+function asciiGrid(width: number, height: number) {
+  return {
+    width: Math.floor(width * ASCII_RESOLUTION),
+    height: Math.floor(height * ASCII_RESOLUTION),
+  };
+}
+
 @Component({
   selector: 'app-home',
   standalone: true,
@@ -38,6 +55,15 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * Draw the scene straight at the size of the character grid. `false` stops
+   * the renderer writing a CSS size onto a canvas that is never in the page.
+   */
+  private setRenderSize(width: number, height: number): void {
+    const grid = asciiGrid(width, height);
+    this.renderer.setSize(grid.width, grid.height, false);
+  }
+
   initThree() {
     this.ngZone.runOutsideAngular(() => {
       const container = document.getElementById('canvas-container');
@@ -71,12 +97,21 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
       // Renderer
       this.renderer = new THREE.WebGLRenderer();
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
 
       // ASCII Effect
       // Usage: AsciiEffect( renderer, charSet, options )
-      this.effect = new AsciiEffect(this.renderer, ' .:-+*=%@#', { invert: true });
+      this.effect = new AsciiEffect(this.renderer, ' .:-+*=%@#', {
+        invert: true,
+        resolution: ASCII_RESOLUTION,
+      });
       this.effect.setSize(window.innerWidth, window.innerHeight);
+
+      // Nothing ever looks at the WebGL canvas: the effect reads it back with
+      // drawImage, shrinks it to the character grid and throws it away. Sizing
+      // it to the window meant rendering 1.3 million pixels a frame to sample
+      // 29 thousand of them, so setSize's own full-window call is undone here.
+      // Same aspect ratio, so the picture is unchanged.
+      this.setRenderSize(window.innerWidth, window.innerHeight);
       this.effect.domElement.style.color = 'white';
       this.effect.domElement.style.backgroundColor = 'transparent'; // Let CSS handle bg if needed, or black
 
@@ -86,7 +121,12 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
 
       // Animate
       const start = Date.now();
-      const animate = () => {
+      let lastFrame = 0;
+      const animate = (now: number) => {
+        this.animationId = requestAnimationFrame(animate);
+        if (now - lastFrame < FRAME_MS) return;
+        lastFrame = now;
+
         const timer = Date.now() - start;
 
         this.sphere.position.y = Math.abs(Math.sin(timer * 0.002)) * 150;
@@ -94,10 +134,9 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
         this.sphere.rotation.z = timer * 0.0002;
 
         this.effect.render(this.scene, this.camera);
-        this.animationId = requestAnimationFrame(animate);
       };
 
-      animate();
+      this.animationId = requestAnimationFrame(animate);
 
       // Resize. A phone fires `resize` on every scroll, because hiding the URL
       // bar changes innerHeight; rebuilding the ASCII grid that often makes the
@@ -113,8 +152,8 @@ export class HomeComponent implements AfterViewInit, OnDestroy {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
 
-        this.renderer.setSize(width, height);
         this.effect.setSize(width, height);
+        this.setRenderSize(width, height);
       };
       window.addEventListener('resize', this.onResize);
     });

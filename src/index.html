@@ -7,6 +7,15 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="favicon.png">
+
+  <!-- Every cover on /music/timeline and /music/stats comes from here, and the
+       first one cannot start before the DNS lookup, the connection and the TLS
+       handshake are done. Opening that here rather than from the page means it
+       is ready by the time the two routes have their data. No crossorigin: a
+       plain <img> is not a CORS request and would not reuse the connection.
+       The seven other routes leave an idle socket behind, which the browser
+       drops after a few seconds. -->
+  <link rel="preconnect" href="https://i.scdn.co">
   <script data-goatcounter="https://mxrjup.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>
 </head>
