@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const multer = require('multer');
@@ -79,6 +80,15 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     next();
 });
+
+// Nothing sits in front of this process, so nothing else can compress. Without
+// this the Angular bundle goes out as 800 kB of plain text instead of 220 kB,
+// and the content JSON at four to six times its compressed size. Everything
+// text-based is covered: the two app bundles, the stylesheets and /api/data.
+// compression leaves images, fonts and video alone (they are already
+// compressed) and skips bodies under 1 kB, where the framing costs more than
+// it saves.
+app.use(compression());
 
 // GitHub calls this on every push to mxrjup-content, and the server pulls the content
 // itself (contentWebhook.js). Mounted ahead of the JSON parser: the signature covers
