@@ -25,8 +25,11 @@ const app = express();
 // Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
 const PORT = process.env.PORT || 3000;
 const CODE_ROOT = path.join(__dirname, '..');
-const BROWSER_DIR = path.join(CODE_ROOT, 'dist/angular-mxrjup/browser');
-const COMPUTER_DIR = path.join(CODE_ROOT, 'dist/computer');
+// Where the two builds land. The host always runs the build before starting the
+// server, so the defaults hold in production; the overrides are what lets the
+// tests point at a directory they control.
+const BROWSER_DIR = path.resolve(CODE_ROOT, process.env.BROWSER_DIR || 'dist/angular-mxrjup/browser');
+const COMPUTER_DIR = path.resolve(CODE_ROOT, process.env.COMPUTER_DIR || 'dist/computer');
 
 // The server reads and writes nothing inside the code checkout. Content (the CMS's
 // JSON and media) and visitor data are separate repositories, checked out wherever
@@ -550,9 +553,37 @@ const sendShell = (res, next, dir) => {
     res.sendFile(path.join(dir, 'index.html'), (err) => err && next());
 };
 
+/**
+ * Whether this request is someone opening a URL, rather than a page asking for
+ * a file it needs.
+ *
+ * Both apps route on the client, so an address the server has no file for is
+ * normally a page of theirs and must be answered with the shell. A missing
+ * script is not: it used to get the shell too, which a browser then refused as
+ * the wrong MIME type - an error naming neither the file nor the fact that it
+ * was gone - while the server logged a 200. Since each page is now fetched on
+ * demand (app.routes.ts), a tab left open across a deploy asks for chunks that
+ * no longer exist, so the difference matters.
+ *
+ * Sec-Fetch-Dest is the browser saying which it is. A request without it is
+ * treated as a navigation, as everything was before: that keeps curl, uptime
+ * checks and browsers too old to send it working exactly as they did, and the
+ * browsers that do send it - all of them that can run this app - get a straight
+ * 404 for a file that is not there.
+ */
+const wantsPage = (req) => {
+    const dest = req.headers['sec-fetch-dest'];
+    return dest === undefined || dest === 'document';
+};
+
 // Windows 95 computer app (React, built to dist/computer)
 app.use('/computer', express.static(COMPUTER_DIR, { setHeaders: computerHeaders }));
-app.get('/computer/*', (req, res, next) => sendShell(res, next, COMPUTER_DIR));
+app.get('/computer/*', (req, res, next) => {
+    // Answered here rather than passed on: next() would reach the Angular shell
+    // below, which is a different app's page.
+    if (!wantsPage(req)) return res.sendStatus(404);
+    sendShell(res, next, COMPUTER_DIR);
+});
 
 // The old hand-built back office lived here; send bookmarks to the CMS.
 app.get('/add', (req, res) => res.redirect(302, '/admin/'));
@@ -562,6 +593,8 @@ app.use(express.static(BROWSER_DIR, { setHeaders: angularHeaders }));
 app.get('*', (req, res, next) => {
     // Unmatched API and upload paths are 404s, not the Angular shell.
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    // Nothing is registered after this, so next() is the 404.
+    if (!wantsPage(req)) return next();
     sendShell(res, next, BROWSER_DIR);
 });
 

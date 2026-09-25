@@ -34,6 +34,8 @@ function startServer(env) {
 let tmp;
 let content;
 let visitors;
+let browserDir;
+let computerDir;
 let server;
 let base;
 
@@ -62,7 +64,25 @@ before(async () => {
     await write('timeline_spotify.json', { items: [{ title: 'Stale', date: '2026-01-01' }] });
     await fs.writeFile(path.join(content, 'uploads', 'cover.jpg'), 'editorial');
 
-    server = startServer({ CONTENT_DIR: content, VISITORS_DIR: visitors });
+    // Stand-ins for the two builds. dist/ is gitignored and a checkout that has
+    // not run `npm run build` has none of it, so the static frontends are
+    // pointed at fixtures here rather than at whatever the machine happens to
+    // have built.
+    browserDir = path.join(tmp, 'browser');
+    computerDir = path.join(tmp, 'computer');
+    await fs.mkdir(path.join(browserDir, 'assets'), { recursive: true });
+    await fs.mkdir(path.join(computerDir, 'assets'), { recursive: true });
+    await fs.writeFile(path.join(browserDir, 'index.html'), '<!doctype html><title>site</title>');
+    await fs.writeFile(path.join(browserDir, 'main-AAAAAAAA.js'), 'export const a = 1;');
+    await fs.writeFile(path.join(computerDir, 'index.html'), '<!doctype html><title>computer</title>');
+    await fs.writeFile(path.join(computerDir, 'assets', 'index-AAAAAAAA.js'), 'export const c = 1;');
+
+    server = startServer({
+        CONTENT_DIR: content,
+        VISITORS_DIR: visitors,
+        BROWSER_DIR: browserDir,
+        COMPUTER_DIR: computerDir,
+    });
     base = `http://localhost:${await server.ready}`;
 });
 
@@ -291,6 +311,81 @@ test('published content is revalidated, never served stale from cache', async ()
     await fs.writeFile(credits, JSON.stringify({ items: [{ id: 'c1' }] }));
     assert.deepEqual(await getJson('/api/data/credits'), [{ id: 'c1' }]);
     await fs.writeFile(credits, JSON.stringify({ items: [] }));
+});
+
+// Both apps route on the client, so the server answers an address it has no file
+// for with their index.html. That used to include a missing script: the browser
+// was handed a page of HTML where it expected a module, refused it on its MIME
+// type, and the server logged a 200. Since each page is fetched on demand, a tab
+// left open across a deploy is exactly how a chunk goes missing.
+const navigation = { 'Sec-Fetch-Dest': 'document' };
+const subresource = { 'Sec-Fetch-Dest': 'script' };
+
+test('a page the apps route themselves is answered with their shell', async () => {
+    for (const [url, title] of [
+        ['/music/stats', 'site'],
+        ['/anything/at/all', 'site'],
+        ['/computer/somewhere', 'computer'],
+    ]) {
+        const res = await fetch(base + url, { headers: navigation });
+        assert.equal(res.status, 200, url);
+        assert.match(res.headers.get('content-type'), /text\/html/, url);
+        assert.match(await res.text(), new RegExp(`<title>${title}</title>`), url);
+        // The shell names bundles that change with every release.
+        assert.equal(res.headers.get('cache-control'), 'no-store, no-cache, must-revalidate', url);
+    }
+});
+
+test('a file a page asked for and that is gone is a 404, not the shell', async () => {
+    for (const url of [
+        '/main-DEPLOYEDAWAY.js',
+        '/chunk-DEPLOYEDAWAY.js',
+        '/styles-DEPLOYEDAWAY.css',
+        '/computer/assets/index-DEPLOYEDAWAY.js',
+        '/computer/assets/win95-DEPLOYEDAWAY.woff2',
+    ]) {
+        const res = await fetch(base + url, { headers: subresource });
+        assert.equal(res.status, 404, url);
+        // The status is the contract; what matters besides is that the body is
+        // not one of the two shells being passed off as the file that is gone.
+        const body = await res.text();
+        assert.doesNotMatch(body, /<title>site<\/title>/, url);
+        assert.doesNotMatch(body, /<title>computer<\/title>/, url);
+    }
+});
+
+test('a file that is there is still served to the page that asked', async () => {
+    for (const [url, type] of [
+        ['/main-AAAAAAAA.js', /javascript/],
+        ['/computer/assets/index-AAAAAAAA.js', /javascript/],
+    ]) {
+        const res = await fetch(base + url, { headers: subresource });
+        assert.equal(res.status, 200, url);
+        assert.match(res.headers.get('content-type'), type, url);
+        assert.equal(res.headers.get('cache-control'), 'public, max-age=31536000, immutable', url);
+    }
+});
+
+test('a client that does not say what it wants is served as it was before', async () => {
+    // curl, uptime checks, and browsers too old for Sec-Fetch-Dest: a route has
+    // to keep working for them, which means the shell, as ever.
+    const res = await fetch(base + '/music/stats');
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /<title>site<\/title>/);
+});
+
+test('a missing computer asset never falls through to the other app', async () => {
+    const res = await fetch(base + '/computer/assets/gone-AAAAAAAA.js', { headers: subresource });
+    assert.equal(res.status, 404);
+    assert.doesNotMatch(await res.text(), /site/);
+});
+
+test('the API and the uploads answer for themselves, whoever asks', async () => {
+    // These never wanted the shell, with or without the header.
+    for (const headers of [navigation, subresource, {}]) {
+        assert.equal((await fetch(base + '/uploads/nothing.png', { headers })).status, 404);
+        assert.equal((await fetch(base + '/api/data/nothing', { headers })).status, 400);
+    }
 });
 
 test('20 chat messages sent at once over WebSocket are all kept', async () => {
