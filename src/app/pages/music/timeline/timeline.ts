@@ -1,20 +1,12 @@
 import { Component, computed, signal, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DataService } from '../../../services/data.service';
+import { spotifyImage } from '../../../shared/spotify-image';
 
-// Spotify publishes every cover in three sizes, chosen by a prefix on the image
-// id. The weekly sync stores the 640px one, around 150 kB each, for cards that
-// render at 60px and grow to 200px under the cursor. The 300px one covers both
-// at a quarter of the weight: across the 156 albums here, 24 MB becomes 6 MB.
-const COVER_640 = 'https://i.scdn.co/image/ab67616d0000b273';
-const COVER_300 = 'https://i.scdn.co/image/ab67616d00001e02';
-
-/** Anything that is not a 640px Spotify cover is left as it is. */
-function smallerCover(url: unknown): unknown {
-  return typeof url === 'string' && url.startsWith(COVER_640)
-    ? COVER_300 + url.slice(COVER_640.length)
-    : url;
-}
+// The sync stores the 640px cover, around 150 kB each, for cards that render at
+// 60px and grow to 200px under the cursor. 300 is the size that covers both:
+// across the 156 albums here, 24 MB becomes 6 MB.
+const CARD_WIDTH = 300;
 
 @Component({
   selector: 'app-timeline',
@@ -31,7 +23,7 @@ export class TimelineComponent implements OnInit {
 
   ngOnInit() {
     this.dataService.getData<any[]>('timeline').subscribe(data => {
-      this.albums.set((data ?? []).map(a => ({ ...a, cover: smallerCover(a.cover) })));
+      this.albums.set((data ?? []).map(a => ({ ...a, cover: spotifyImage(a.cover, CARD_WIDTH) })));
     });
   }
 

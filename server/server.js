@@ -19,6 +19,7 @@ const {
     NO_STORE, angularCacheControl, computerCacheControl
 } = require('./cachePolicy');
 const { createImageVariants } = require('./imageVariants');
+const { createImageSizes } = require('./imageSize');
 
 const app = express();
 // Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
@@ -143,6 +144,7 @@ app.use('/uploads/users', (req, res) => res.sendStatus(404));
 // disk in seconds, so browsers must revalidate (a cheap 304 via the ETag) rather than
 // show a stale image for however long a max-age would allow.
 const REVALIDATE = 'no-cache';
+const imageSizes = createImageSizes({ dir: CONTENT_UPLOADS_DIR });
 // A page that shows an image small asks for it small: /uploads/art.png?w=800.
 // Mounted ahead of the originals, which answer everything it passes on.
 app.use('/uploads', createImageVariants({ dir: CONTENT_UPLOADS_DIR }));
@@ -203,6 +205,9 @@ app.get('/api/data/:type', async (req, res) => {
         // A hidden album stays in timeline.json so the weekly Spotify sync of the
         // content repository does not add it back; it is only kept off the site.
         if (type === 'timeline') items = items.filter((item) => item.hidden !== true);
+        // The media grid lays out pictures of every shape; without their sizes
+        // each one that loads pushes the rows under it down (imageSize.js).
+        if (type === 'media') items = await imageSizes.describe(items);
         // The file is re-read on every request so a publish shows up at once; keep
         // browsers from answering from their cache instead (res.json sets the ETag).
         res.setHeader('Cache-Control', REVALIDATE);
