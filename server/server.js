@@ -15,6 +15,10 @@ const {
 } = require('./abuseLimits');
 const { createContentUpdater, createContentHook } = require('./contentWebhook');
 const { scheduleDaily, runBackupScript } = require('./backupSchedule');
+const {
+    NO_STORE, angularCacheControl, computerCacheControl
+} = require('./cachePolicy');
+const { createImageVariants } = require('./imageVariants');
 
 const app = express();
 // Managed hosting assigns the port at runtime; 3000 is the local-dev fallback.
@@ -139,6 +143,9 @@ app.use('/uploads/users', (req, res) => res.sendStatus(404));
 // disk in seconds, so browsers must revalidate (a cheap 304 via the ETag) rather than
 // show a stale image for however long a max-age would allow.
 const REVALIDATE = 'no-cache';
+// A page that shows an image small asks for it small: /uploads/art.png?w=800.
+// Mounted ahead of the originals, which answer everything it passes on.
+app.use('/uploads', createImageVariants({ dir: CONTENT_UPLOADS_DIR }));
 app.use('/uploads', express.static(CONTENT_UPLOADS_DIR, {
     cacheControl: false,
     setHeaders: (res) => res.setHeader('Cache-Control', REVALIDATE)
@@ -525,27 +532,28 @@ app.delete('/api/computer/folder/:name', limits.desktop, async (req, res) => {
 // this server also serves both builds. Registered after the API routes above so
 // it only sees what they didn't handle.
 
-// The app shells must never be cached: their filename is stable while the
-// hashed bundles they point at change on every build, so a cached copy keeps
-// loading the previous release. nginx set this before it was removed.
-const NO_STORE = 'no-store, no-cache, must-revalidate';
-const shellHeaders = (res, filePath) => {
-    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', NO_STORE);
+/** Apply a Cache-Control the policy asked for, or leave Express's default. */
+const cacheControl = (pick) => (res, filePath) => {
+    const value = pick(filePath);
+    if (value) res.setHeader('Cache-Control', value);
 };
+const angularHeaders = cacheControl((f) => angularCacheControl(BROWSER_DIR, f));
+const computerHeaders = cacheControl((f) => computerCacheControl(COMPUTER_DIR, f));
+
 const sendShell = (res, next, dir) => {
     res.setHeader('Cache-Control', NO_STORE);
     res.sendFile(path.join(dir, 'index.html'), (err) => err && next());
 };
 
 // Windows 95 computer app (React, built to dist/computer)
-app.use('/computer', express.static(COMPUTER_DIR, { setHeaders: shellHeaders }));
+app.use('/computer', express.static(COMPUTER_DIR, { setHeaders: computerHeaders }));
 app.get('/computer/*', (req, res, next) => sendShell(res, next, COMPUTER_DIR));
 
 // The old hand-built back office lived here; send bookmarks to the CMS.
 app.get('/add', (req, res) => res.redirect(302, '/admin/'));
 
 // Angular site, with client-side routing falling back to its index.html
-app.use(express.static(BROWSER_DIR, { setHeaders: shellHeaders }));
+app.use(express.static(BROWSER_DIR, { setHeaders: angularHeaders }));
 app.get('*', (req, res, next) => {
     // Unmatched API and upload paths are 404s, not the Angular shell.
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
